@@ -2,48 +2,28 @@
 #include <math.h>
 
 __global__ void calc(struct neuralnetwork* neuralnetptr,int layerIndex,double* inputs,double* outputs){
-    int i = threadIdx.x;//index of connection
-    int j = blockIdx.x;//index of nueron
+    int j = blockDim.x * blockIdx.x + threadIdx.x;//index of neuron
 
     neuralnetwork NN = *neuralnetptr;
     connection* conptr;
-    int* Froms;
-    FromsOfNeuron<<<2,112901>>>(conptr,layerIndex,j,Froms);
-    cudaMalloc((void**)&conptr,(*Froms)*sizeof(connection));
+    NuCon Froms = NN.layers[layerIndex].group[j].froms;
+    cudaMalloc((void**)&conptr,Froms.NumOfCon*sizeof(connection));
 
     double weitghedSum = 0;
-    for (int k = 0; k < *Froms; k++)
+    for (int k = 0; k < Froms.NumOfCon; k++)
     {
-        weitghedSum+= conptr[i].weight * inputs[i];
+
+        weitghedSum+=  *  inputs[k];
     }
-    double* param = outputs + (sizeof(double) * j);
-    Activation(&weitghedSum,NN.ActivFunc,param);
-    NN.layers[layerIndex].group[j].value = *param;
-    cudaFree(Froms);
+    weitghedSum += NN.layers[layerIndex].group[j].bias;
+    Activation(&weitghedSum,NN.ActivFunc,&(outputs[j]));
+    NN.layers[layerIndex].group[j].value = outputs[j];
+    cudaFree(conptr);
 }
-__global__ void train(neuralnetwork* neuralnetptr,double* inputs,double* outputs){
-    int i = threadIdx.x;
-    int j = blockIdx.x;
-    int globalindex = blockDim.x * j + i;
+__global__ void diffcalc(neuralnetwork* neuralnetptr,int layerIndex,double* Expected,double* outputs){
+    int i = blockDim.x * blockIdx.x + threadIdx.x;//index of neuron
 
 
-}
-
-__device__ void FromsOfNeuron(connection* conptr,unsigned int LId,unsigned int NId,int* output){
-    int i = threadIdx.x;
-    int j = blockIdx.x;
-    int globalindex = blockDim.x * j + i;
-    if(conptr[globalindex].LT == LId && conptr[globalindex].ToId == NId){
-        (*output)++;
-    }
-}
-__device__ void ToesOfNeuron(connection* conptr,unsigned int LId,unsigned int NId,int* output){
-    int i = threadIdx.x;
-    int j = blockIdx.x;
-    int globalindex = blockDim.x * j + i;
-    if(conptr[globalindex].LF == LId && conptr[globalindex].FromId == NId){
-        (*output)++;
-    }
 }
 __device__ void Activation(double* input,ActivationFunc af,double* output){
     switch (af)
@@ -63,6 +43,29 @@ __device__ void Activation(double* input,ActivationFunc af,double* output){
         break;
     case 4:
         output = input;
+        break;
+    default:
+        break;
+    }
+}
+__device__ void DActivation(double* input,ActivationFunc AF,double* output){
+    switch(AF){
+    case 1:
+        double out = pow(cosh(*input),-2);
+        output = &out;
+        break;
+    case 2:
+        double out = exp(*input)*pow(1+exp(*input),-2);
+        output = &out;
+        break;
+    case 3:
+        double out=0;
+        if(*input > 0) out = 1;
+        output = &out;
+        break;
+    case 4:
+        double out = 1;
+        output = &out;
         break;
     default:
         break;
