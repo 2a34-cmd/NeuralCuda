@@ -1,0 +1,12 @@
+#ifndef CALC_HU
+#define CALC_HU
+#include "holders.hpp"
+
+__global__ void calc(neuralnetwork* neuralnetptr,int layerIndex);
+__global__ void diffcalc(neuralnetwork* neuralnetptr,int layerIndex);
+
+__global__ void InputFirst(neuralnetwork* neuralnetptr, double* Inputs);
+__global__ void diffLast(neuralnetwork* neuralnetptr,double* Expected, double MLRate);
+
+__global__ void back(neuralnetwork* neuralnetptr);
+#endif
