@@ -7,23 +7,6 @@
 using namespace std;
 
 #define exists(r) line.find(r) != string::npos
-//int NumOfNu(int x){
-//     switch (x)
-//     {
-//     case 0:
-//         return 784;
-//     case 1:
-//         return 257;
-//     case 2:
-//         return 84;
-//     case 3:
-//         return 29;
-//     case 4:
-//         return 10;
-//     default:
-//         return NAN;
-//     }
-// }
 
 
 

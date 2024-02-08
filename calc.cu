@@ -1,6 +1,6 @@
 #include <math.h>
 #include "holders.hpp"
-
+using namespace std;
 /// The functions below don't use the idea of child threads, which may be implemented later
 
 // this function needs <<<N,M>>> where N*M equals number of neuronals in the layer with layerIndex  
@@ -47,10 +47,21 @@ __global__ void InputFirst(neuralnetwork* neuralnetptr, double* Inputs){
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     neuralnetptr->layers[0].group[j].value = Inputs[j];
 }
+__global__ void InputFirst(neuralnetwork* neuralnetptr, byte* Inputs){
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    neuralnetptr->layers[0].group[j].value = (double)Inputs[j];
+}
+
+
 __global__ void diffLast(neuralnetwork* neuralnetptr,double* Expected, double MLRate){
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers-1].group[j];
     n.difference = MLRate * abs(n.value - Expected[j]);
+}
+__global__ void diffLast(neuralnetwork* neuralnetptr,byte* Expected, double MLRate){
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers-1].group[j];
+    n.difference = MLRate * abs(n.value - (double)Expected[j]);
 }
 
 //<<<N,M>>> where N*M == number of neurons and connections
