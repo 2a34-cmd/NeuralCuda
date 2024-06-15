@@ -1,3 +1,4 @@
 cpu.*
 cuda.*
 .vscode/**
+test/**

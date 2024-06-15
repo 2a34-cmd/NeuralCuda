@@ -29,7 +29,7 @@ int main(int __argc,char *__argv[]){
             calc<<<>>>(Nptr,j);
             cudaDeviceSynchronize();
         }
-        diffLast(Nptr,EFNN[i],(double)__argv[4]);
+        diffLast(Nptr, (byte*)EFNN[i], (double)__argv[4]);
         cudaDeviceSynchronize();
         for (size_t j = Nptr->NumOfLayers; j >= 1; j--)
         {
