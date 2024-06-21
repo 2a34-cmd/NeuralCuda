@@ -9,19 +9,32 @@ typedef struct{
     unsigned int id;
     NuCon froms,toes;
 }neuron;
+
+
 typedef struct{
     neuron* group;
     unsigned int NumOfNu;
     unsigned int LId;
 }layer;
+
+
 typedef struct{
     unsigned int FromId,LF,LT,ToId;
     double weight;
 }connection;
+
+
 typedef struct{
     unsigned int NumOfCon;
     connection** ConPtr;
 }NuCon;
+
+
+typedef enum{
+    Tanh=1,sigmoid,ReLU,Id
+}ActivationFunc;
+
+
 typedef struct{
     int nId;
     ActivationFunc ActivFunc;
@@ -31,9 +44,11 @@ typedef struct{
     unsigned int NumOfConnenction;
 }neuralnetwork;
 
-typedef enum{
-    Tanh=1,sigmoid,ReLU,Id
-}ActivationFunc;
+
+
+
+
+
 
 
 class NueralNet
@@ -94,7 +109,6 @@ NuC::NuC(int id,double bias)
     froms = 1;
     toes=1;
 }
-
 NuC::~NuC()
 {
 }

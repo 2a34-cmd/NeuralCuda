@@ -9,5 +9,6 @@ using namespace std;
 #define exists(r) line.find(r) != string::npos
 
 // int NumOfNu(int x);
-neuralnetwork FromFile(string fileName);
+void FromFile(string fileName,neuralnetwork* NNp);
+void ToFile(string fileName,neuralnetwork* NNp);
 #endif
