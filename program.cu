@@ -57,8 +57,11 @@ int main(int __argc,char *__argv[]){
         //     diffcalc<<<>>>(NNp, j);
         //     cudaDeviceSynchronize();
         // }
+
+
+        
         preback<<<,1>>>(NNp,ITNN[i],EFNN[i],stod(__argv[5]));
-        back(NNp);
+        back<<<,>>>(NNp);
     }
     
 

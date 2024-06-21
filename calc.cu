@@ -178,6 +178,7 @@ __global__ void back(neuralnetwork* neuralnetptr){
         //                     1/(num of froms of n)
         n.bias -= diff *DActivation(LinearExp,NN.ActivFunc) /(n.froms.NumOfCon);
     }
+    __syncthreads();
 }
 
 
