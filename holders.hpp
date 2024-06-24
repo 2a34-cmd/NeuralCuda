@@ -41,6 +41,8 @@ typedef struct{
     // toes are the list that goes from the neuron
     NuCon froms,toes;
 }neuron;
+
+
 //layer is the next block of neural network
 typedef struct{
     //the pointer of neurons and thier count
@@ -49,6 +51,18 @@ typedef struct{
     // to keep track of layer
     unsigned int LId;
 }layer;
+
+
+// the enum is encoding a simple int for generic activation functions
+
+typedef enum {
+    Tanh=1,
+    sigmoid =2,
+    ReLU =3,
+    Id =4
+}ActivationFunc;
+
+
 //neural network struct keeps track of genral info about the whole network
 typedef struct{
     // index of neural network
@@ -63,10 +77,6 @@ typedef struct{
     unsigned int NumOfConnenction;
 }neuralnetwork;
 
-// the enum is encoding a simple int for generic activation functions
-typedef enum{
-    Tanh=1,sigmoid,ReLU,Id
-}ActivationFunc;
 
 // the classes below are used for getting information from files and to them
 //     they aren't used in the real computation b/c in gpu proccessing,
@@ -76,16 +86,14 @@ typedef enum{
 //      structs need to be fully initialized to work in the first place
 
 
-class NueralNet
+class NuC
 {
 public:
-    int nId;
-    ActivationFunc ActivationFunction;
-    std::vector<LayerC> layers;
-    std::vector<connection> cons;
-    NueralNet(int Id,int AF);
-    NueralNet();
-    ~NueralNet();
+    double bias,value,difference;
+    unsigned int id;
+    int froms,toes;
+    NuC(int id,double bias);
+    ~NuC();
 };
 class LayerC
 {
@@ -96,13 +104,15 @@ public:
     LayerC(int LId);
     ~LayerC();
 };
-class NuC
+class NueralNet
 {
 public:
-    double bias,value,difference;
-    unsigned int id;
-    int froms,toes;
-    NuC(int id,double bias);
-    ~NuC();
+    int nId;
+    ActivationFunc ActivationFunction;
+    std::vector<LayerC> layers;
+    std::vector<connection> cons;
+    NueralNet(int Id,int AF);
+    NueralNet();
+    ~NueralNet();
 };
 #endif

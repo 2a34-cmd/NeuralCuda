@@ -1,10 +1,4 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
-#include <algorithm>
-#include "holders.hpp"
-using namespace std;
+#include "file.hpp"
 
 #define exists(r) line.find(r) != string::npos
 
@@ -13,14 +7,18 @@ using namespace std;
 //this method extracts real numbers and puts them in a list
 //            from the input string (e.g. "1 2.3 -9.4"  =>  {1, 2.3, -9.4})
 vector<double> floatExtract(string lin){
+    if(lin.find('[') != string::npos){
+        int s = lin.size();
+    }
     string num;
     vector<double> floats;
     for(int i = 0; i<lin.size();i++){
-        if(isdigit(lin[i]) || lin[i]=='.' || lin[i]=='-'){
+        if(isdigit(lin[i]) || lin[i]=='.' || lin[i]=='-' || lin[i] == 'E'){
             num += lin[i];
         }else{
             if (!num.empty()){
                 floats.push_back(stod(num));
+                num.clear();
             }
         }
     }
@@ -31,7 +29,6 @@ vector<double> floatExtract(string lin){
 NueralNet file(string fN){
     string line;
     class NueralNet NN;
-    
     ifstream File(fN);
     vector<double> buffer;
 
@@ -52,12 +49,11 @@ NueralNet file(string fN){
             // neuron nu;
             // nu.bias = buffer.back();
             // nu.id = (int)buffer.front();
-            LayerC layer = (LayerC)NN.layers.back();
-            layer.Neurons.push_back(nu);
+            NN.layers[NN.layers.size() -1].Neurons.push_back(nu);
         }
         if(exists("[")){
             connection conn;
-
+            buffer.pop_back();
             conn.weight = buffer.back();
             buffer.pop_back();
 
@@ -76,7 +72,7 @@ NueralNet file(string fN){
             NN.layers[conn.LT].Neurons[conn.ToId].toes++;
             NN.layers[conn.LF].Neurons[conn.FromId].froms++;
         }
-        buffer.empty();
+        buffer.clear();
     }
     File.close();
     return NN;
@@ -103,7 +99,7 @@ neuralnetwork Converter(NueralNet Input){
     {
         layer L;
         L.LId = n-i-1;
-        LayerC LC = (LayerC)Input.layers.back();
+        LayerC LC = (LayerC)Input.layers[n-i-1];
         L.NumOfNu = LC.Neurons.size();
         // making pointer of neurons for the layer and allocating memory for it
         neuron* NuPtr = (neuron*) malloc(sizeof(neuron) * L.NumOfNu);
@@ -116,16 +112,14 @@ neuralnetwork Converter(NueralNet Input){
             ne.id = j;
             ne.froms.NumOfCon = nu.froms;
             ne.toes.NumOfCon = nu.toes;
-            ne.froms.ConPtr = (connection**)malloc(sizeof(connection*) * ne.froms.NumOfCon);
-            
-            
-            
-            ne.toes.ConPtr = (connection**) malloc(sizeof(connection*) * ne.toes.NumOfCon);
+            ne.froms.ConPtr = (connection**) calloc(ne.froms.NumOfCon, sizeof(connection*));
+            ne.toes.ConPtr  = (connection**) calloc(ne.toes.NumOfCon,  sizeof(connection*));
             NuPtr[j] = ne;
         }
         L.group = NuPtr;
 
-        nn.layers[n-i-1] = L;
+        // nn.layers[n-i-1] = L;
+        LPtr[n-i-1] = L;
     }
     nn.layers = LPtr;
     int m = 0;
@@ -133,25 +127,35 @@ neuralnetwork Converter(NueralNet Input){
     for (int i = 0; i < nn.NumOfConnenction; i++)
     {
         conptr[i]= (connection)Input.cons[i];
-        neuron ne = nn.layers[conptr[i].LF].group[conptr[i].FromId];
-        for (int a = 0; a < ne.froms.NumOfCon; a++)
+        neuron FromNeuron = nn.layers[conptr[i].LF].group[conptr[i].FromId];
+        neuron ToNeuron = nn.layers[conptr[i].LT].group[conptr[i].ToId];
+        for (int a = 0; a < FromNeuron.froms.NumOfCon; a++)
             {
-                if(ne.froms.ConPtr[a] == 0){ne.froms.ConPtr[a] = &(conptr[i]); break;}
+                if(FromNeuron.froms.ConPtr[a] == 0)
+                {
+                    FromNeuron.froms.ConPtr[a] = &(conptr[i]);
+                     break;
+                }
             }
-            for (int b = 0; b < ne.toes.NumOfCon; b++)
+            for (int b = 0; b < ToNeuron.toes.NumOfCon; b++)
             {
-                if(ne.toes.ConPtr[b] == 0){ ne.toes.ConPtr[b] = &(conptr[i]); break;}
+                if(ToNeuron.toes.ConPtr[b] == 0)
+                { 
+                    ToNeuron.toes.ConPtr[b] = &(conptr[i]);
+                    break;
+                }
             }
     }
     nn.connections = conptr;
+    return nn;
 }
 
 
 //this method is just the combination of the previous 2 methods
 //it takes the file path in return of pointer towards neural network struct
-void FromFile(string fileName,neuralnetwork* NNp){
+neuralnetwork FromFile(string fileName){
     neuralnetwork NN = Converter(file(fileName));
-    NNp  = &NN;
+    return NN;
 }
 
 // you could say the way file written makes it easier to write than to read
@@ -163,7 +167,10 @@ void FromFile(string fileName,neuralnetwork* NNp){
 void ToFile(string fileName,neuralnetwork* NNp){
     std::string line;
     ofstream Writer(fileName);
-
+    if(!Writer.is_open()){
+        cout<< "there are problems, output file stream isn't working";
+        return;
+    }
     Writer << "s\n";;
     line = "net" + to_string(NNp->nId) + ":" + to_string(static_cast<int>(NNp->ActivFunc));
     Writer << line << ";\n";
@@ -171,7 +178,7 @@ void ToFile(string fileName,neuralnetwork* NNp){
         line = "l" + to_string(i);
         Writer << line << ";\n";;
         for(int j =0;j<(NNp->layers[i].NumOfNu);j++){
-            line = "nu" + to_string(j) + ": " + to_string(NNp->layers[i].group[j].bias);
+            line = "nu " + to_string(j) + " : " + to_string(NNp->layers[i].group[j].bias);
             Writer << line << ";\n";
         }
     }
@@ -181,8 +188,10 @@ void ToFile(string fileName,neuralnetwork* NNp){
         connection con = NNp->connections[i];
         line = "[" + to_string(con.LF) + "," + to_string(con.FromId) + "][" +
             to_string(con.LT) + "," + to_string(con.ToId) + "]" + to_string(con.weight);
-        Writer << line << ";\n";;
+        Writer << line << ":0;\n";;
     }
+
+    Writer.flush();
     Writer.close();
     return;
 }

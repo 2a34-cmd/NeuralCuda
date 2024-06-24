@@ -1,14 +1,15 @@
 #ifndef FILE_HPP
 #define FILE_HPP
+using namespace std;
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <vector>
-using namespace std;
+#include "holders.hpp"
 
 #define exists(r) line.find(r) != string::npos
 
 // int NumOfNu(int x);
-void FromFile(string fileName,neuralnetwork* NNp);
+neuralnetwork FromFile(string fileName);
 void ToFile(string fileName,neuralnetwork* NNp);
 #endif

@@ -2,3 +2,5 @@ cpu.*
 cuda.*
 .vscode/**
 test/**
+program.cpp
+**.exe
