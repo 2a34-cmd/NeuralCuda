@@ -20,6 +20,22 @@ typedef struct
     byte label;
 } image;
 
+//a little function to change endianess of integers
+int swap(int d)
+{
+   int a;
+   unsigned char *dst = (unsigned char *)&a;
+   unsigned char *src = (unsigned char *)&d;
+
+   dst[0] = src[3];
+   dst[1] = src[2];
+   dst[2] = src[1];
+   dst[3] = src[0];
+
+   return a;
+}
+
+
 /// @brief
 /// @param ImagePAth
 /// @param LabelPath
@@ -62,38 +78,72 @@ image *Mnist(string ImagePAth, string LabelPath, int startingPos)
     return imgPtr;
 }
 
-byte** InputsToNN(string ImagePath, int startingPos)
+byte** InputsToNN(byte**X, string ImagePath, int startingPos)
 {
-    byte **Arr;
-    
-    ifstream ImageF(ImagePath);
+    ifstream ImageF(ImagePath,ios::binary| ios::in);
+    if(!ImageF.is_open()){
+        cout << "There are problems";
+        return X;
+    }
     int magicNum, NumOfIm, Width, hight;
-    ImageF >> magicNum >> NumOfIm >> Width >> hight;
+    ImageF.read((char*)&magicNum,sizeof(magicNum));
+    ImageF.read((char*)&NumOfIm,sizeof(NumOfIm));
+    ImageF.read((char*)&Width,sizeof(Width));
+    ImageF.read((char*)&hight,sizeof(hight));
+    magicNum = swap(magicNum);
+    NumOfIm = swap(NumOfIm);
+    Width = swap(Width);
+    hight = swap(hight);
 
+    byte** Arr;
+    cudaMallocManaged((void**)&Arr,sizeof(byte*)*(NumOfIm-startingPos));
+    X = Arr;
 
-    // Arr is normal list pointer to cuda unified memory pointers
-    Arr = (byte**)malloc(sizeof(byte*)*(NumOfIm-startingPos));
-
-    // it doesn't work when passing adress of byte** (which makes it of type byte***) as argument
-    //that's why the commented line below isn't used
-
-    // cuMemAllocManaged(&Arr , sizeof(byte*) * (NumOfIm-startingPos));
-
-    ImageF.seekg(startingPos * Width * hight + 1, ios_base::cur);
     for (size_t i = startingPos; i < NumOfIm; i++)
     {
-        //the commented line makes Arr[i] normal pointers
-
-        // Arr[i] = (byte *)malloc(sizeof(byte) * Width * hight);
-
-        //Arr[i] being cuda unified memory pointers
-        cudaMallocManaged(&Arr[i], sizeof(byte) * Width * hight);
-        ImageF.read(reinterpret_cast<char *>(Arr[i]), sizeof(byte) * Width * hight);
+        // Arr[i] = (byte*)calloc(Width*hight,sizeof(byte));
+        cudaMallocManaged((void**)&Arr[i],Width*hight,sizeof(byte));
+       
+        ImageF.read((char*)&(Arr[i][0]),sizeof(Arr[i][0])*Width*hight);
+        
+        X[i] = Arr[i];
     }
+
+
     ImageF.close();
     return Arr;
+
+
+    // byte **Arr;
+    
+    // ifstream ImageF(ImagePath);
+    // int magicNum, NumOfIm, Width, hight;
+    // ImageF >> magicNum >> NumOfIm >> Width >> hight;
+
+
+    // // Arr is normal list pointer to cuda unified memory pointers
+    // Arr = (byte**)malloc(sizeof(byte*)*(NumOfIm-startingPos));
+
+    // // it doesn't work when passing adress of byte** (which makes it of type byte***) as argument
+    // //that's why the commented line below isn't used
+
+    // // cuMemAllocManaged(&Arr , sizeof(byte*) * (NumOfIm-startingPos));
+
+    // ImageF.seekg(startingPos * Width * hight + 1, ios_base::cur);
+    // for (size_t i = startingPos; i < NumOfIm; i++)
+    // {
+    //     //the commented line makes Arr[i] normal pointers
+
+    //     // Arr[i] = (byte *)malloc(sizeof(byte) * Width * hight);
+
+    //     //Arr[i] being cuda unified memory pointers
+    //     cudaMallocManaged(&Arr[i], sizeof(byte) * Width * hight);
+    //     ImageF.read(reinterpret_cast<char *>(Arr[i]), sizeof(byte) * Width * hight);
+    // }
+    // ImageF.close();
+    // return Arr;
 }
-byte** ExpectedFromNN(string LabelPath, int startingPos)
+byte** ExpectedFromNN(byte** X,string LabelPath, int startingPos)
 {
     byte** Arr;
     ifstream LabelF(LabelPath);
@@ -102,9 +152,11 @@ byte** ExpectedFromNN(string LabelPath, int startingPos)
 
     LabelF >> magicLabel >> numOfLabel;
     //Arr here will work as normal list pointer to unified memory pointers
-    Arr = (byte**)malloc((numOfLabel - startingPos) * sizeof(byte*));
+    // Arr = (byte**)malloc((numOfLabel - startingPos) * sizeof(byte*));
+    cudaMallocManaged((void**)&Arr,(numOfLabel - startingPos) * sizeof(byte*));
+    X = Arr;
 
-    LabelF.seekg(startingPos, ios_base::cur);
+    // LabelF.seekg(startingPos, ios_base::cur);
 
     for (size_t i = startingPos; i < numOfLabel; i++)
     {
@@ -116,6 +168,7 @@ byte** ExpectedFromNN(string LabelPath, int startingPos)
 
         //However, we want Arr[i] to be cuda pointers
         cudaMallocManaged( (void**)&Arr[i], sizeof(byte)* 10 );
+        X[i] = Arr[i];
         //couldn't find a smarter way to initialize values of Arr[i] with 0 
         // keep in mind that Arr[i] is (abstract) unified memory pointer
         for(size_t j =0; j <10;j++){
@@ -160,4 +213,69 @@ byte** ExpectedFromNN(string LabelPath, int startingPos)
     }
     LabelF.close();
     return Arr;
+    // byte** Arr;
+    // ifstream LabelF(LabelPath);
+    // unsigned char uc;
+    // int magicLabel, numOfLabel;
+
+    // LabelF >> magicLabel >> numOfLabel;
+    // //Arr here will work as normal list pointer to unified memory pointers
+    // Arr = (byte**)malloc((numOfLabel - startingPos) * sizeof(byte*));
+
+    // LabelF.seekg(startingPos, ios_base::cur);
+
+    // for (size_t i = startingPos; i < numOfLabel; i++)
+    // {
+    //     LabelF >> uc;
+    //     // the commented code does work when using normal pointer
+
+    //     // Arr[i] = (byte*)calloc(10,sizeof(byte));
+
+
+    //     //However, we want Arr[i] to be cuda pointers
+    //     cudaMallocManaged( (void**)&Arr[i], sizeof(byte)* 10 );
+    //     //couldn't find a smarter way to initialize values of Arr[i] with 0 
+    //     // keep in mind that Arr[i] is (abstract) unified memory pointer
+    //     for(size_t j =0; j <10;j++){
+    //         Arr[i][j] = (byte)0;
+    //     }
+    //     switch (uc)
+    //     {
+    //         case 0:
+    //             Arr[i][0] = (byte)1;
+    //             break;
+    //         case 1:
+    //             Arr[i][1] = (byte)1;
+    //             break;
+    //         case 2:
+    //             Arr[i][2] = (byte)1;
+    //             break;
+    //         case 3:
+    //             Arr[i][3] = (byte)1;
+    //             break;
+    //         case 4:
+    //             Arr[i][4] = (byte)1;
+    //             break;
+    //         case 5:
+    //             Arr[i][5] = (byte)1;
+    //             break;
+    //         case 6:
+    //             Arr[i][6] = (byte)1;
+    //             break;
+    //         case 7:
+    //             Arr[i][7] = (byte)1;
+    //             break;
+    //         case 8:
+    //             Arr[i][8] = (byte)1;
+    //             break;
+    //         case 9:
+    //             Arr[i][9] = (byte)1;
+    //             break;
+    //         default:
+    //             cout << "There's error";
+    //             break;
+    //     }
+    // }
+    // LabelF.close();
+    // return Arr;
 }

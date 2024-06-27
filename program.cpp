@@ -1,10 +1,12 @@
-//#include "holders.hpp"
-//#include "mnist.hpp"
-#include "file.hpp"
+// #include "holders.hpp"
+#include "mnist.hpp"
+// #include "file.hpp"
 
 int main(){
-    neuralnetwork* NNp;
-    FromFile("C:\\Users\\Khtably55\\Desktop\\ProgrammingProjects(PP)\\NeuralNetwork\\TestFolder\\test3\\version8.mn1",NNp);
-    NNp->nId = 1;
+    byte** Image,** Label;
+    Image = InputsToNN(Image,"C:\\Users\\Khtably55\\Desktop\\train-images-idx3-ubyte\\train-images.idx3-ubyte",0);
+    Label = ExpectedFromNN(Label,"C:\\Users\\Khtably55\\Desktop\\train-images-idx3-ubyte\\train-labels.idx1-ubyte",0);
+    free(Image);
+    free(Label);
     return 0;
 }

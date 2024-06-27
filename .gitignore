@@ -4,3 +4,4 @@ cuda.*
 test/**
 program.cpp
 **.exe
+mnist.cpp
