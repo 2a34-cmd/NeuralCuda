@@ -9,4 +9,11 @@ __global__ void InputFirst(neuralnetwork* neuralnetptr, double* Inputs);
 __global__ void diffLast(neuralnetwork* neuralnetptr,double* Expected, double MLRate);
 
 __global__ void back(neuralnetwork* neuralnetptr);
+__global__ void preback(neuralnetwork* neuralnetptr, double* Inputs,double* Expected, double MLRate);
+
+__global__ void InputFirst(neuralnetwork* neuralnetptr, unsigned char* Inputs);
+__global__ void diffLast(neuralnetwork* neuralnetptr,unsigned char* Expected, double MLRate);
+
+__global__ void back(neuralnetwork* neuralnetptr);
+__global__ void preback(neuralnetwork* neuralnetptr, unsigned char* Inputs,unsigned char* Expected, double MLRate);
 #endif

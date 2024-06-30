@@ -12,12 +12,12 @@ using namespace std;
 //struct below defines input and output of neural network
 typedef struct
 {
-    // list pointer of input bytes 
-    byte *grayscale;
+    // list pointer of input unsigned chars 
+    unsigned char *grayscale;
     // the output number
     // however, it needs to translated into list with size 10 which is mostly 0 except for the element
     //      with the index the same as label
-    byte label;
+    unsigned char label;
 } image;
 
 //a little function to change endianess of integers
@@ -46,11 +46,11 @@ int swap(int d)
 // in return of list pointer of image struct
 image *Mnist(string ImagePAth, string LabelPath, int startingPos)
 {
-    // mnist image files are written with bytes where the first 16 are
+    // mnist image files are written with unsigned chars where the first 16 are
     // (4 for each integer) 1- a number for checking integrty of data called magic number
     //                      2- number of images in file (60,000)
     //                      3&4- width and hieght of images (28,28)
-    // mnist label files are written where the first 8 bytes are (4)magic number and (4)number of labels
+    // mnist label files are written where the first 8 unsigned chars are (4)magic number and (4)number of labels
     ifstream ImageF(ImagePAth);
     ifstream LabelF(LabelPath);
     image *imgPtr;
@@ -61,24 +61,23 @@ image *Mnist(string ImagePAth, string LabelPath, int startingPos)
     LabelF >> magicLabel >> numOfLabel;
 
     // imgPtr = (image *)malloc((NumOfIm - startingPos) * sizeof(image));
-    image* imgPtr;
     cudaMallocManaged((void**)&imgPtr,(NumOfIm - startingPos) * sizeof(image));
     ImageF.seekg(startingPos * Width * hight + 1, ios_base::cur);
     LabelF.seekg(startingPos, ios_base::cur);
     for (size_t i = startingPos; i < NumOfIm; i++)
     {
-        // imgPtr[i].grayscale = (byte *)malloc(sizeof(byte) * Width * hight);
-        cudaMallocManaged((void**)&(imgPtr[i].grayscale),sizeof(byte) * Width * hight);
+        // imgPtr[i].grayscale = (unsigned char *)malloc(sizeof(unsigned char) * Width * hight);
+        cudaMallocManaged((void**)&(imgPtr[i].grayscale),sizeof(unsigned char) * Width * hight);
         LabelF >> uc;
-        imgPtr[i].label = (std::byte)uc;
-        ImageF.read(reinterpret_cast<char *>(imgPtr[i].grayscale), sizeof(byte) * Width * hight);
+        imgPtr[i].label = uc;
+        ImageF.read(reinterpret_cast<char *>(imgPtr[i].grayscale), sizeof(unsigned char) * Width * hight);
     }
     LabelF.close();
     ImageF.close();
     return imgPtr;
 }
 
-byte** InputsToNN(byte**X, string ImagePath, int startingPos)
+unsigned char** InputsToNN(unsigned char**X, string ImagePath, int startingPos)
 {
     ifstream ImageF(ImagePath,ios::binary| ios::in);
     if(!ImageF.is_open()){
@@ -95,14 +94,14 @@ byte** InputsToNN(byte**X, string ImagePath, int startingPos)
     Width = swap(Width);
     hight = swap(hight);
 
-    byte** Arr;
-    cudaMallocManaged((void**)&Arr,sizeof(byte*)*(NumOfIm-startingPos));
+    unsigned char** Arr;
+    cudaMallocManaged((void**)&Arr,sizeof(unsigned char*)*(NumOfIm-startingPos));
     X = Arr;
 
     for (size_t i = startingPos; i < NumOfIm; i++)
     {
-        // Arr[i] = (byte*)calloc(Width*hight,sizeof(byte));
-        cudaMallocManaged((void**)&Arr[i],Width*hight,sizeof(byte));
+        // Arr[i] = (unsigned char*)calloc(Width*hight,sizeof(unsigned char));
+        cudaMallocManaged((void**)&Arr[i],Width*hight,sizeof(unsigned char));
        
         ImageF.read((char*)&(Arr[i][0]),sizeof(Arr[i][0])*Width*hight);
         
@@ -114,7 +113,7 @@ byte** InputsToNN(byte**X, string ImagePath, int startingPos)
     return Arr;
 
 
-    // byte **Arr;
+    // unsigned char **Arr;
     
     // ifstream ImageF(ImagePath);
     // int magicNum, NumOfIm, Width, hight;
@@ -122,38 +121,38 @@ byte** InputsToNN(byte**X, string ImagePath, int startingPos)
 
 
     // // Arr is normal list pointer to cuda unified memory pointers
-    // Arr = (byte**)malloc(sizeof(byte*)*(NumOfIm-startingPos));
+    // Arr = (unsigned char**)malloc(sizeof(unsigned char*)*(NumOfIm-startingPos));
 
-    // // it doesn't work when passing adress of byte** (which makes it of type byte***) as argument
+    // // it doesn't work when passing adress of unsigned char** (which makes it of type unsigned char***) as argument
     // //that's why the commented line below isn't used
 
-    // // cuMemAllocManaged(&Arr , sizeof(byte*) * (NumOfIm-startingPos));
+    // // cuMemAllocManaged(&Arr , sizeof(unsigned char*) * (NumOfIm-startingPos));
 
     // ImageF.seekg(startingPos * Width * hight + 1, ios_base::cur);
     // for (size_t i = startingPos; i < NumOfIm; i++)
     // {
     //     //the commented line makes Arr[i] normal pointers
 
-    //     // Arr[i] = (byte *)malloc(sizeof(byte) * Width * hight);
+    //     // Arr[i] = (unsigned char *)malloc(sizeof(unsigned char) * Width * hight);
 
     //     //Arr[i] being cuda unified memory pointers
-    //     cudaMallocManaged(&Arr[i], sizeof(byte) * Width * hight);
-    //     ImageF.read(reinterpret_cast<char *>(Arr[i]), sizeof(byte) * Width * hight);
+    //     cudaMallocManaged(&Arr[i], sizeof(unsigned char) * Width * hight);
+    //     ImageF.read(reinterpret_cast<char *>(Arr[i]), sizeof(unsigned char) * Width * hight);
     // }
     // ImageF.close();
     // return Arr;
 }
-byte** ExpectedFromNN(byte** X,string LabelPath, int startingPos)
+unsigned char** ExpectedFromNN(unsigned char** X,string LabelPath, int startingPos)
 {
-    byte** Arr;
+    unsigned char** Arr;
     ifstream LabelF(LabelPath);
     unsigned char uc;
     int magicLabel, numOfLabel;
 
     LabelF >> magicLabel >> numOfLabel;
     //Arr here will work as normal list pointer to unified memory pointers
-    // Arr = (byte**)malloc((numOfLabel - startingPos) * sizeof(byte*));
-    cudaMallocManaged((void**)&Arr,(numOfLabel - startingPos) * sizeof(byte*));
+    // Arr = (unsigned char**)malloc((numOfLabel - startingPos) * sizeof(unsigned char*));
+    cudaMallocManaged((void**)&Arr,(numOfLabel - startingPos) * sizeof(unsigned char*));
     X = Arr;
 
     // LabelF.seekg(startingPos, ios_base::cur);
@@ -163,48 +162,48 @@ byte** ExpectedFromNN(byte** X,string LabelPath, int startingPos)
         LabelF >> uc;
         // the commented code does work when using normal pointer
 
-        // Arr[i] = (byte*)calloc(10,sizeof(byte));
+        // Arr[i] = (unsigned char*)calloc(10,sizeof(unsigned char));
 
 
         //However, we want Arr[i] to be cuda pointers
-        cudaMallocManaged( (void**)&Arr[i], sizeof(byte)* 10 );
+        cudaMallocManaged( (void**)&Arr[i], sizeof(unsigned char)* 10 );
         X[i] = Arr[i];
         //couldn't find a smarter way to initialize values of Arr[i] with 0 
         // keep in mind that Arr[i] is (abstract) unified memory pointer
         for(size_t j =0; j <10;j++){
-            Arr[i][j] = (byte)0;
+            Arr[i][j] = (unsigned char)0;
         }
         switch (uc)
         {
             case 0:
-                Arr[i][0] = (byte)1;
+                Arr[i][0] = (unsigned char)1;
                 break;
             case 1:
-                Arr[i][1] = (byte)1;
+                Arr[i][1] = (unsigned char)1;
                 break;
             case 2:
-                Arr[i][2] = (byte)1;
+                Arr[i][2] = (unsigned char)1;
                 break;
             case 3:
-                Arr[i][3] = (byte)1;
+                Arr[i][3] = (unsigned char)1;
                 break;
             case 4:
-                Arr[i][4] = (byte)1;
+                Arr[i][4] = (unsigned char)1;
                 break;
             case 5:
-                Arr[i][5] = (byte)1;
+                Arr[i][5] = (unsigned char)1;
                 break;
             case 6:
-                Arr[i][6] = (byte)1;
+                Arr[i][6] = (unsigned char)1;
                 break;
             case 7:
-                Arr[i][7] = (byte)1;
+                Arr[i][7] = (unsigned char)1;
                 break;
             case 8:
-                Arr[i][8] = (byte)1;
+                Arr[i][8] = (unsigned char)1;
                 break;
             case 9:
-                Arr[i][9] = (byte)1;
+                Arr[i][9] = (unsigned char)1;
                 break;
             default:
                 cout << "There's error";
@@ -213,14 +212,14 @@ byte** ExpectedFromNN(byte** X,string LabelPath, int startingPos)
     }
     LabelF.close();
     return Arr;
-    // byte** Arr;
+    // unsigned char** Arr;
     // ifstream LabelF(LabelPath);
     // unsigned char uc;
     // int magicLabel, numOfLabel;
 
     // LabelF >> magicLabel >> numOfLabel;
     // //Arr here will work as normal list pointer to unified memory pointers
-    // Arr = (byte**)malloc((numOfLabel - startingPos) * sizeof(byte*));
+    // Arr = (unsigned char**)malloc((numOfLabel - startingPos) * sizeof(unsigned char*));
 
     // LabelF.seekg(startingPos, ios_base::cur);
 
@@ -229,47 +228,47 @@ byte** ExpectedFromNN(byte** X,string LabelPath, int startingPos)
     //     LabelF >> uc;
     //     // the commented code does work when using normal pointer
 
-    //     // Arr[i] = (byte*)calloc(10,sizeof(byte));
+    //     // Arr[i] = (unsigned char*)calloc(10,sizeof(unsigned char));
 
 
     //     //However, we want Arr[i] to be cuda pointers
-    //     cudaMallocManaged( (void**)&Arr[i], sizeof(byte)* 10 );
+    //     cudaMallocManaged( (void**)&Arr[i], sizeof(unsigned char)* 10 );
     //     //couldn't find a smarter way to initialize values of Arr[i] with 0 
     //     // keep in mind that Arr[i] is (abstract) unified memory pointer
     //     for(size_t j =0; j <10;j++){
-    //         Arr[i][j] = (byte)0;
+    //         Arr[i][j] = (unsigned char)0;
     //     }
     //     switch (uc)
     //     {
     //         case 0:
-    //             Arr[i][0] = (byte)1;
+    //             Arr[i][0] = (unsigned char)1;
     //             break;
     //         case 1:
-    //             Arr[i][1] = (byte)1;
+    //             Arr[i][1] = (unsigned char)1;
     //             break;
     //         case 2:
-    //             Arr[i][2] = (byte)1;
+    //             Arr[i][2] = (unsigned char)1;
     //             break;
     //         case 3:
-    //             Arr[i][3] = (byte)1;
+    //             Arr[i][3] = (unsigned char)1;
     //             break;
     //         case 4:
-    //             Arr[i][4] = (byte)1;
+    //             Arr[i][4] = (unsigned char)1;
     //             break;
     //         case 5:
-    //             Arr[i][5] = (byte)1;
+    //             Arr[i][5] = (unsigned char)1;
     //             break;
     //         case 6:
-    //             Arr[i][6] = (byte)1;
+    //             Arr[i][6] = (unsigned char)1;
     //             break;
     //         case 7:
-    //             Arr[i][7] = (byte)1;
+    //             Arr[i][7] = (unsigned char)1;
     //             break;
     //         case 8:
-    //             Arr[i][8] = (byte)1;
+    //             Arr[i][8] = (unsigned char)1;
     //             break;
     //         case 9:
-    //             Arr[i][9] = (byte)1;
+    //             Arr[i][9] = (unsigned char)1;
     //             break;
     //         default:
     //             cout << "There's error";

@@ -1,6 +1,46 @@
 #include <math.h>
 #include "holders.hpp"
 using namespace std;
+
+
+//the activation function and its derviative
+__device__ double Activation(double input,ActivationFunc af){
+    double out;
+    switch (af)
+    {
+    case 1: //hyperbolic tangent
+        out = tanh(input);
+        return out;
+    case 2: //sigmoid (the same function of  FD distribution) 1/(e^(-x) +1)
+        out = exp(input)/(1+exp(input));
+        return out;
+    case 3: // rectified linear unit : if positive, like linear fuction. otherwise, it's 0
+        out=0;
+        if(input > 0) out = input;
+        return out;
+    case 4:// identity function. it's nonlinear, but it's here for CNN and other types
+        return input;
+    default:
+        return NAN;
+    }
+}
+// this method is just returning the value of derviative of activation function, given its code AF and an input
+__device__ double DActivation(double input,ActivationFunc AF){
+    switch(AF){
+    case 1:
+        return pow(cosh(input),-2);
+    case 2:
+        return exp(input)*pow(1+exp(input),-2);
+    case 3:
+        if(input > 0) return 1;
+        else return 0;
+    case 4:
+        return 1;
+    default:
+        return NAN;
+    }
+}
+
 /// The functions below don't use the idea of child threads, which may be implemented later
 
 // this function needs <<<N,M>>> where N*M equals number of neuronals in the layer with layerIndex  
@@ -11,11 +51,11 @@ __global__ void calc(neuralnetwork* neuralnetptr,int layerIndex){
     neuralnetwork NN = *neuralnetptr;
     NuCon Froms = NN.layers[layerIndex].group[j].froms;
     double weightedSum = NN.layers[layerIndex].group[j].bias; //initilized with neuron bias
-    for (size_t i = 0; i < Froms.NumOfCon; i++)
+    for (int i = 0; i < Froms.NumOfCon; i++)
     {
         weightedSum += (Froms.ConPtr[i]->weight) * NN.layers[Froms.ConPtr[i]->LF].group[Froms.ConPtr[i]->FromId].value;
     }
-    Activation(weightedSum,NN.ActivFunc,&NN.layers[layerIndex].group[j].value);
+    NN.layers[layerIndex].group[j].value = Activation(weightedSum,NN.ActivFunc);
     
 }
 // this function needs <<<N,M>>> where N*M equals number of neuronals in the layer with layerIndex
@@ -38,18 +78,18 @@ __global__ void diffcalc(neuralnetwork* neuralnetptr,int layerIndex){
     //                     DActivation(inverse of activation(finishing neuron value)) * 
     //                     wieght from this neuron to finishing neuron   )
     neuralnetwork NN = *neuralnetptr;
-    connection* conptr;
+    //connection* conptr;
     NuCon Toes = NN.layers[layerIndex].group[j].toes;// the list of connections to next neurons
-    double value = NN.layers[layerIndex].group[j].value;// value of this neuron
+    //double value = NN.layers[layerIndex].group[j].value;// value of this neuron
     double weightedSum = 0;
     double Term = 1;
-    for (size_t i = 0; i < Toes.NumOfCon; i++)// we are summing over connections
+    for (int i = 0; i < Toes.NumOfCon; i++)// we are summing over connections
     {
         // to calculate the wieghted sum of next neuron, it is recommended to fins its Froms connections
         NuCon froms = NN.layers[Toes.ConPtr[i]->LT].group[Toes.ConPtr[i]->ToId].froms;
 
         double LinearExp = NN.layers[Toes.ConPtr[i]->LT].group[Toes.ConPtr[i]->ToId].bias;
-        for (size_t j = 0; j < froms.NumOfCon; j++)
+        for (int j = 0; j < froms.NumOfCon; j++)
         {
             LinearExp += (froms.ConPtr[j]->weight) * NN.layers[froms.ConPtr[j]->LF].group[froms.ConPtr[j]->FromId].value;
         }
@@ -68,7 +108,7 @@ __global__ void InputFirst(neuralnetwork* neuralnetptr, double* Inputs){
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     neuralnetptr->layers[0].group[j].value = Inputs[j];
 }
-__global__ void InputFirst(neuralnetwork* neuralnetptr, byte* Inputs){
+__global__ void InputFirst(neuralnetwork* neuralnetptr, unsigned char* Inputs){
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     neuralnetptr->layers[0].group[j].value = (double)Inputs[j];
 }
@@ -79,7 +119,7 @@ __global__ void diffLast(neuralnetwork* neuralnetptr,double* Expected, double ML
     neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers-1].group[j];
     n.difference = MLRate * (n.value - Expected[j]);
 }
-__global__ void diffLast(neuralnetwork* neuralnetptr,byte* Expected, double MLRate){
+__global__ void diffLast(neuralnetwork* neuralnetptr,unsigned char* Expected, double MLRate){
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers-1].group[j];
     n.difference = MLRate * (n.value - (double)Expected[j]);
@@ -94,60 +134,68 @@ __global__ void diffLast(neuralnetwork* neuralnetptr,byte* Expected, double MLRa
 //      M needs to be 1 
 __global__ void preback(neuralnetwork* neuralnetptr, double* Inputs,double* Expected, double MLRate){
     int j = threadIdx.x;// indexing neurons
-    try{
-    neuralnetptr->layers[0].group[j].value = Inputs[j];// finished InputFirst
-    }catch(...){}
+    if(j<neuralnetptr->layers[0].NumOfNu){
+        neuralnetptr->layers[0].group[j].value = Inputs[j];// finished InputFirst
+    }
+    else{
+    }
     
     neuralnetwork NN = *neuralnetptr;
-    for(size_t i = 1 ;i<NN.NumOfLayers;i++){
+
+    for(int i = 1 ;i<NN.NumOfLayers;i++){
         __syncthreads();
-        try{
+        if(j<NN.layers[i].NumOfNu){
             NuCon Froms = NN.layers[i].group[j].froms;
             double weightedSum = NN.layers[i].group[j].bias; //initilized with neuron bias
-            for (size_t i = 0; i < Froms.NumOfCon; i++)
-            {
-                weightedSum += (Froms.ConPtr[i]->weight) * NN.layers[Froms.ConPtr[i]->LF].group[Froms.ConPtr[i]->FromId].value;
-            }
-            Activation(weightedSum,NN.ActivFunc,&NN.layers[i].group[j].value);
+            for (int k = 0; k < Froms.NumOfCon; k++)
+                {
+                    weightedSum += (Froms.ConPtr[k]->weight) * NN.layers[Froms.ConPtr[k]->LF].group[Froms.ConPtr[k]->FromId].value;
+                }
+            NN.layers[i].group[j].value = Activation(weightedSum,NN.ActivFunc);
         }
-        catch(...){}
+        else{
+        }
     }//finished calc funcitons
     __syncthreads();
-    try{
+    if(j<neuralnetptr->layers[neuralnetptr->NumOfLayers -1].NumOfNu){
         neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers-1].group[j];
         n.difference = MLRate * (n.value - Expected[j]);
     }
-    catch(...){}//finished DiffLast
-
+    else{
+    }
     __syncthreads();// it might be not needed, but I'm not sure
 }
-__global__ void preback(neuralnetwork* neuralnetptr, byte* Inputs,byte* Expected, double MLRate){
+__global__ void preback(neuralnetwork* neuralnetptr, unsigned char* Inputs,unsigned char* Expected, double MLRate){
     int j = threadIdx.x;// indexing neurons
-    try{
-    neuralnetptr->layers[0].group[j].value = (double)Inputs[j];// finished InputFirst
-    }catch(...){}
+    if(j<neuralnetptr->layers[0].NumOfNu){
+        neuralnetptr->layers[0].group[j].value = Inputs[j];// finished InputFirst
+    }
+    else{
+    }
     
     neuralnetwork NN = *neuralnetptr;
-    for(size_t i = 1 ;i<NN.NumOfLayers;i++){
+    
+    for(int i = 1 ;i<NN.NumOfLayers;i++){
         __syncthreads();
-        try{
+        if(j<NN.layers[i].NumOfNu){
             NuCon Froms = NN.layers[i].group[j].froms;
             double weightedSum = NN.layers[i].group[j].bias; //initilized with neuron bias
-            for (size_t i = 0; i < Froms.NumOfCon; i++)
-            {
-                weightedSum += (Froms.ConPtr[i]->weight) * NN.layers[Froms.ConPtr[i]->LF].group[Froms.ConPtr[i]->FromId].value;
-            }
-            Activation(weightedSum,NN.ActivFunc,&NN.layers[i].group[j].value);
+            for (int k = 0; k < Froms.NumOfCon; k++)
+                {
+                    weightedSum += (Froms.ConPtr[k]->weight) * NN.layers[Froms.ConPtr[k]->LF].group[Froms.ConPtr[k]->FromId].value;
+                }
+            NN.layers[i].group[j].value = Activation(weightedSum,NN.ActivFunc);
         }
-        catch(...){}
+        else{
+        }
     }//finished calc funcitons
     __syncthreads();
-    try{
+    if(j<neuralnetptr->layers[neuralnetptr->NumOfLayers -1].NumOfNu){
         neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers-1].group[j];
-        n.difference = MLRate * (n.value - (double)Expected[j]);
+        n.difference = MLRate * (n.value - Expected[j]);
     }
-    catch(...){}//finished DiffLast
-    
+    else{
+    }
     __syncthreads();// it might be not needed, but I'm not sure
 }
 
@@ -162,9 +210,9 @@ __global__ void back(neuralnetwork* neuralnetptr){
         double val = NN.layers[NN.connections->LF].group[NN.connections->FromId].value;
 
         double LinearExp = n.bias;
-        for (size_t j = 0; j < n.froms.NumOfCon; j++)
+        for (int k = 0; k < n.froms.NumOfCon; k++)
         {
-            LinearExp += (n.froms.ConPtr[j]->weight) * NN.layers[n.froms.ConPtr[j]->LF].group[n.froms.ConPtr[j]->FromId].value;
+            LinearExp += (n.froms.ConPtr[k]->weight) * NN.layers[n.froms.ConPtr[k]->LF].group[n.froms.ConPtr[k]->FromId].value;
         }
         // (del error/del wieght) = (del error/ del finishing neuron)(del finishing neuron /del wiegth)
         //                        = finishing neuron difference * starting neuron value *   
@@ -182,43 +230,3 @@ __global__ void back(neuralnetwork* neuralnetptr){
 }
 
 
-//the activation function and its derviative
-__device__ void Activation(double input,ActivationFunc af,double* output){
-    switch (af)
-    {
-    case 1: //hyperbolic tangent
-        double out = tanh(input);
-        output = &out;
-        break;
-    case 2: //sigmoid (the same function of  FD distribution) 1/(e^(-x) +1)
-        double out = exp(input)/(1+exp(input));
-        output = &out;
-        break;
-    case 3: // rectified linear unit : if positive, like linear fuction. otherwise, it's 0
-        double out=0;
-        if(input > 0) out = input;
-        output = &out;
-        break;
-    case 4:// identity function. it's nonlinear, but it's here for CNN and other types
-        output = &input;
-        break;
-    default:
-        break;
-    }
-}
-// this method is just returning the value of derviative of activation function, given its code AF and an input
-__device__ double DActivation(double input,ActivationFunc AF){
-    switch(AF){
-    case 1:
-        return pow(cosh(input),-2);
-    case 2:
-        return exp(input)*pow(1+exp(input),-2);
-    case 3:
-        if(input > 0) return 1;
-        else return 0;
-    case 4:
-        return 1;
-    default:
-        return NAN;
-    }
-}
