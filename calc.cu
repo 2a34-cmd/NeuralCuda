@@ -126,6 +126,7 @@ __global__ void diffLast(neuralnetwork* neuralnetptr,unsigned char* Expected, do
 }
 
 
+
 // we need to call InputFirst, (serial) calc, diffLast before calling back
 // this method does that without caring much about parallelizing in best shape
 //      since the methods are fast calculations
@@ -136,8 +137,6 @@ __global__ void preback(neuralnetwork* neuralnetptr, double* Inputs,double* Expe
     int j = threadIdx.x;// indexing neurons
     if(j<neuralnetptr->layers[0].NumOfNu){
         neuralnetptr->layers[0].group[j].value = Inputs[j];// finished InputFirst
-    }
-    else{
     }
     
     neuralnetwork NN = *neuralnetptr;
@@ -152,8 +151,6 @@ __global__ void preback(neuralnetwork* neuralnetptr, double* Inputs,double* Expe
                     weightedSum += (Froms.ConPtr[k]->weight) * NN.layers[Froms.ConPtr[k]->LF].group[Froms.ConPtr[k]->FromId].value;
                 }
             NN.layers[i].group[j].value = Activation(weightedSum,NN.ActivFunc);
-        }
-        else{
         }
     }//finished calc funcitons
     __syncthreads();
@@ -170,9 +167,6 @@ __global__ void preback(neuralnetwork* neuralnetptr, unsigned char* Inputs,unsig
     if(j<neuralnetptr->layers[0].NumOfNu){
         neuralnetptr->layers[0].group[j].value = Inputs[j];// finished InputFirst
     }
-    else{
-    }
-    
     neuralnetwork NN = *neuralnetptr;
     
     for(int i = 1 ;i<NN.NumOfLayers;i++){
@@ -186,15 +180,11 @@ __global__ void preback(neuralnetwork* neuralnetptr, unsigned char* Inputs,unsig
                 }
             NN.layers[i].group[j].value = Activation(weightedSum,NN.ActivFunc);
         }
-        else{
-        }
     }//finished calc funcitons
     __syncthreads();
     if(j<neuralnetptr->layers[neuralnetptr->NumOfLayers -1].NumOfNu){
         neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers-1].group[j];
         n.difference = MLRate * (n.value - Expected[j]);
-    }
-    else{
     }
     __syncthreads();// it might be not needed, but I'm not sure
 }
@@ -229,4 +219,17 @@ __global__ void back(neuralnetwork* neuralnetptr){
     __syncthreads();
 }
 
-
+__host__ double error(neuralnetwork* neuralnetptr, double* Expected){
+    double f = 0;
+    for(int i=0;i<neuralnetptr->layers[neuralnetptr->NumOfLayers -1].NumOfNu;i++){
+        f+= pow(neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[i].value -Expected[i],2);
+    }
+    return f;
+}
+__host__ double error(neuralnetwork* neuralnetptr, unsigned char* Expected){
+    double f = 0;
+    for(int i=0;i<neuralnetptr->layers[neuralnetptr->NumOfLayers -1].NumOfNu;i++){
+        f+= pow(neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[i].value - (double)Expected[i],2);
+    }
+    return f;
+}

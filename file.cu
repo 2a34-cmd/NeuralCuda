@@ -1,5 +1,7 @@
 #include "file.hpp"
 #include <iostream>
+#include <cuda.h>
+#include <cuda_runtime.h>
 #include <fstream>
 using namespace std;
 #define exists(r) line.find(r) != string::npos
@@ -95,7 +97,8 @@ neuralnetwork Converter(NueralNet Input){
     int n = nn.NumOfLayers;
     // making pointer of layer list and allocating the size
     // this is 1 reason from many why I can't translate file to neuralnetwork struct directly 
-    layer* LPtr = (layer*) malloc(sizeof(layer) * n);
+    layer* LPtr;
+    cudaMallocManaged((void**)&LPtr,sizeof(layer) * n);
     for (int i = 0; i < n; i++)
     {
         layer L;
@@ -103,7 +106,8 @@ neuralnetwork Converter(NueralNet Input){
         LayerC LC = (LayerC)Input.layers[n-i-1];
         L.NumOfNu = LC.Neurons.size();
         // making pointer of neurons for the layer and allocating memory for it
-        neuron* NuPtr = (neuron*) malloc(sizeof(neuron) * L.NumOfNu);
+        neuron* NuPtr;
+        cudaMallocManaged((void**)&NuPtr,sizeof(neuron) * L.NumOfNu);
         for (int j = 0; j < L.NumOfNu; j++)
         {
             neuron ne;
@@ -113,8 +117,8 @@ neuralnetwork Converter(NueralNet Input){
             ne.id = j;
             ne.froms.NumOfCon = nu.froms;
             ne.toes.NumOfCon = nu.toes;
-            ne.froms.ConPtr = (connection**) calloc(ne.froms.NumOfCon, sizeof(connection*));
-            ne.toes.ConPtr  = (connection**) calloc(ne.toes.NumOfCon,  sizeof(connection*));
+            cudaMallocManaged((void**)&ne.froms.ConPtr,ne.froms.NumOfCon * sizeof(connection*));
+            cudaMallocManaged((void**)&ne.toes.ConPtr,ne.toes.NumOfCon * sizeof(connection*));
             NuPtr[j] = ne;
         }
         L.group = NuPtr;
@@ -123,8 +127,8 @@ neuralnetwork Converter(NueralNet Input){
         LPtr[n-i-1] = L;
     }
     nn.layers = LPtr;
-    int m = 0;
-    connection* conptr=(connection*)malloc(sizeof(connection) * nn.NumOfConnenction);
+    connection* conptr;
+    cudaMallocManaged((void**)&conptr,sizeof(connection) * nn.NumOfConnenction);
     for (int i = 0; i < nn.NumOfConnenction; i++)
     {
         conptr[i]= (connection)Input.cons[i];

@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "holders.hpp"
-#include "mnist.hpp"
+// #include "holders.hpp"
 #include "file.hpp"
+#include "mnist.hpp"
 #include <cuda_runtime.h>
 #include <cuda.h>
 #include "calc.hu"
@@ -18,14 +18,13 @@
 
 int main(int argc,char *argv[]){
     int GPUId = cudaGetDevice(&GPUId);
-    printf("%d is num of args and first thing to be printed!!\n",argc);
-    if(argc != 6){
-        printf("there must be 5 arguments\n");
-        return 5;
-    }
+    printf("%d is num of args and. also %d is id of gpu\n",argc,GPUId);
+    // if(argc != 6){
+    //     printf("there must be 5 arguments\n");
+    //     return 5;
+    // }
 
     // unifed (accessible from both CPU & GPU) pointer to neural network
-    printf("here the program\n");
     neuralnetwork* NNp;
     cudaError_t err = cudaMallocManaged((void**)&NNp,sizeof(neuralnetwork));
     if(err != cudaSuccess){
@@ -36,7 +35,8 @@ int main(int argc,char *argv[]){
     //FromFile functoin will assign NNp with adress of neural network
     //since it's unifed memory (at least, in abstract manner), we can use GPU right away
     neuralnetwork nn = FromFile(argv[1]);
-    NNp = &nn;
+    //NNp = &nn;
+    cudaMemcpy(NNp,&nn,sizeof(nn),cudaMemcpyDefault);
     cudaMemPrefetchAsync(NNp,sizeof(neuralnetwork),GPUId);
     
     // finding both the count of neurons of first and last layer for inputing and outputing purposes
@@ -46,11 +46,9 @@ int main(int argc,char *argv[]){
 
     // getting both inputs(images) & outputs(labels) for neural network
     unsigned char** ITNN;
-    ITNN = (unsigned char**)NNp;
     ITNN = InputsToNN(ITNN,argv[2],(int)stoi(argv[4]));
-    unsigned char** EFNN = ITNN;
+    unsigned char** EFNN;
     EFNN = ExpectedFromNN(EFNN,argv[3],(int)stoi(argv[4]));
-
     // reapeting from starting point until reaching number of training epsidoes (which is 60,000)
     for (int i = (int)stoi(argv[4]); i < 60000; i++)
     {
@@ -68,13 +66,11 @@ int main(int argc,char *argv[]){
         //     diffcalc<<<>>>(NNp, j);
         //     cudaDeviceSynchronize();
         // }
-
-
-        
-        preback<<<1,1>>>(NNp,ITNN[i],EFNN[i],stod(argv[5]));
+        preback<<<1,784>>>(NNp,ITNN[i],EFNN[i],stod(argv[5]));
         cudaDeviceSynchronize();
-        back<<<1,1>>>(NNp);
+        back<<<289,784>>>(NNp);
         cudaDeviceSynchronize();
+        printf("iteration %d : error %lf\n",i,error(NNp,EFNN[i]));
     }
     
 

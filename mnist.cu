@@ -145,11 +145,18 @@ unsigned char** InputsToNN(unsigned char**X, string ImagePath, int startingPos)
 unsigned char** ExpectedFromNN(unsigned char** X,string LabelPath, int startingPos)
 {
     unsigned char** Arr;
-    ifstream LabelF(LabelPath);
+    ifstream LabelF(LabelPath,ios::in|ios::binary);
     unsigned char uc;
     int magicLabel, numOfLabel;
 
-    LabelF >> magicLabel >> numOfLabel;
+    if(!LabelF.is_open()){
+        cout << "There are problems";
+        return X;
+    }
+    LabelF.read((char*)&magicLabel,sizeof(magicLabel));
+    LabelF.read((char*)&numOfLabel,sizeof(numOfLabel));
+    magicLabel = swap(magicLabel);
+    numOfLabel = swap(numOfLabel);
     //Arr here will work as normal list pointer to unified memory pointers
     // Arr = (unsigned char**)malloc((numOfLabel - startingPos) * sizeof(unsigned char*));
     cudaMallocManaged((void**)&Arr,(numOfLabel - startingPos) * sizeof(unsigned char*));
@@ -159,7 +166,7 @@ unsigned char** ExpectedFromNN(unsigned char** X,string LabelPath, int startingP
 
     for (size_t i = startingPos; i < numOfLabel; i++)
     {
-        LabelF >> uc;
+        LabelF.read((char*)&uc,sizeof(uc));
         // the commented code does work when using normal pointer
 
         // Arr[i] = (unsigned char*)calloc(10,sizeof(unsigned char));
