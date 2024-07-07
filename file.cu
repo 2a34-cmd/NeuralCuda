@@ -119,6 +119,8 @@ neuralnetwork Converter(NueralNet Input){
             ne.toes.NumOfCon = nu.toes;
             cudaMallocManaged((void**)&ne.froms.ConPtr,ne.froms.NumOfCon * sizeof(connection*));
             cudaMallocManaged((void**)&ne.toes.ConPtr,ne.toes.NumOfCon * sizeof(connection*));
+            // cudaMemset(&ne.froms.ConPtr,0,ne.froms.NumOfCon * sizeof(connection*));
+            // cudaMemset(&ne.toes.ConPtr,0,ne.toes.NumOfCon * sizeof(connection*));
             NuPtr[j] = ne;
         }
         L.group = NuPtr;

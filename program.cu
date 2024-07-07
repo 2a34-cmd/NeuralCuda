@@ -48,9 +48,10 @@ int main(int argc,char *argv[]){
     unsigned char** ITNN;
     ITNN = InputsToNN(ITNN,argv[2],(int)stoi(argv[4]));
     unsigned char** EFNN;
+    string v = "";
     EFNN = ExpectedFromNN(EFNN,argv[3],(int)stoi(argv[4]));
     // reapeting from starting point until reaching number of training epsidoes (which is 60,000)
-    for (int i = (int)stoi(argv[4]); i < 60000; i++)
+    for (int i = (int)stoi(argv[4]); i < 10000; i++)
     {
         // InputFirst<<<>>>(NNp, ITNN[i]);
         // cudaDeviceSynchronize();
@@ -68,9 +69,10 @@ int main(int argc,char *argv[]){
         // }
         preback<<<1,784>>>(NNp,ITNN[i],EFNN[i],stod(argv[5]));
         cudaDeviceSynchronize();
+        printf("iteration %d : error %f\n",i,error(NNp,EFNN[i]));
+        cin >> v;
         back<<<289,784>>>(NNp);
         cudaDeviceSynchronize();
-        printf("iteration %d : error %lf\n",i,error(NNp,EFNN[i]));
     }
     
 
