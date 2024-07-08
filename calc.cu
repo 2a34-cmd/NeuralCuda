@@ -1,5 +1,6 @@
 #include <math.h>
 #include "holders.hpp"
+#include <stdio.h>
 using namespace std;
 
 // the activation function and its derviative
@@ -55,13 +56,17 @@ __global__ void calc(neuralnetwork *neuralnetptr, int layerIndex)
 {
     int j = blockDim.x * blockIdx.x + threadIdx.x; // index of neuron
     neuralnetwork NN = *neuralnetptr;
-    NuCon Toes = NN.layers[layerIndex].group[j].toes;
-    double weightedSum = NN.layers[layerIndex].group[j].bias; // initilized with neuron bias
-    for (int i = 0; i < Toes.NumOfCon; i++)
+    if (j < NN.layers[layerIndex].NumOfNu)
     {
-        weightedSum += (Toes.ConPtr[i]->weight) * NN.layers[Toes.ConPtr[i]->LF].group[Toes.ConPtr[i]->FromId].value;
+        NuCon Toes = NN.layers[layerIndex].group[j].toes;
+        double weightedSum = NN.layers[layerIndex].group[j].bias; // initilized with neuron bias
+        for (int i = 0; i < Toes.NumOfCon; i++)
+        {
+            weightedSum += (Toes.ConPtr[i]->weight) * NN.layers[Toes.ConPtr[i]->LF].group[Toes.ConPtr[i]->FromId].value;
+        }
+        NN.layers[layerIndex].group[j].value = Activation(weightedSum, NN.ActivFunc);
     }
-    NN.layers[layerIndex].group[j].value = Activation(weightedSum, NN.ActivFunc);
+    // neuralnetptr = &NN;
 }
 // this function needs <<<N,M>>> where N*M equals number of neuronals in the layer with layerIndex
 // can't use the function with layerIndex == neuralnetptr->numOfLayers -1
@@ -83,30 +88,33 @@ __global__ void diffcalc(neuralnetwork *neuralnetptr, int layerIndex)
     //                     (del error/del finishing neuron) *
     //                     DActivation(inverse of activation(finishing neuron value)) *
     //                     wieght from this neuron to finishing neuron   )
-    neuralnetwork NN = *neuralnetptr;
-    // connection* conptr;
-    NuCon Froms = NN.layers[layerIndex].group[j].froms; // the list of connections to next neurons
-    // double value = NN.layers[layerIndex].group[j].value;// value of this neuron
-    double weightedSum = 0;
-    double Term = 1;
-    for (int i = 0; i < Froms.NumOfCon; i++) // we are summing over connections
+    if (j < neuralnetptr->layers[layerIndex].NumOfNu)
     {
-        // to calculate the wieghted sum of next neuron, it is recommended to fins its Froms connections
-        NuCon toes = NN.layers[Froms.ConPtr[i]->LT].group[Froms.ConPtr[i]->ToId].toes;
-
-        double LinearExp = NN.layers[Froms.ConPtr[i]->LT].group[Froms.ConPtr[i]->ToId].bias;
-        for (int j = 0; j < toes.NumOfCon; j++)
+        neuralnetwork NN = *neuralnetptr;
+        // connection* conptr;
+        NuCon Froms = NN.layers[layerIndex].group[j].froms; // the list of connections to next neurons
+        // double value = NN.layers[layerIndex].group[j].value;// value of this neuron
+        double weightedSum = 0;
+        double Term = 1;
+        for (int i = 0; i < Froms.NumOfCon; i++) // we are summing over connections
         {
-            LinearExp += (toes.ConPtr[j]->weight) * NN.layers[toes.ConPtr[j]->LF].group[toes.ConPtr[j]->FromId].value;
+            // to calculate the wieghted sum of next neuron, it is recommended to fins its Froms connections
+            NuCon toes = NN.layers[Froms.ConPtr[i]->LT].group[Froms.ConPtr[i]->ToId].toes;
+
+            double LinearExp = NN.layers[Froms.ConPtr[i]->LT].group[Froms.ConPtr[i]->ToId].bias;
+            for (int k = 0; k < toes.NumOfCon; k++)
+            {
+                LinearExp += (toes.ConPtr[k]->weight) * NN.layers[toes.ConPtr[k]->LF].group[toes.ConPtr[k]->FromId].value;
+            }
+            // linear expersion should be the input of Daf
+            Term *= DActivation(LinearExp, NN.ActivFunc);
+            Term *= NN.layers[Froms.ConPtr[i]->LT].group[Froms.ConPtr[i]->ToId].difference;
+            Term *= Froms.ConPtr[i]->weight;
+            weightedSum += Term;
+            Term = 1;
         }
-        // linear expersion should be the input of Daf
-        Term *= DActivation(LinearExp, NN.ActivFunc);
-        Term *= NN.layers[Froms.ConPtr[i]->LT].group[Froms.ConPtr[i]->ToId].difference;
-        Term *= Froms.ConPtr[i]->weight;
-        weightedSum += Term;
-        Term = 1;
+        NN.layers[layerIndex].group[j].difference = weightedSum;
     }
-    NN.layers[layerIndex].group[j].difference = weightedSum;
 }
 
 __global__ void InputFirst(neuralnetwork *neuralnetptr, double *Inputs)
@@ -117,20 +125,22 @@ __global__ void InputFirst(neuralnetwork *neuralnetptr, double *Inputs)
 __global__ void InputFirst(neuralnetwork *neuralnetptr, unsigned char *Inputs)
 {
     int j = blockDim.x * blockIdx.x + threadIdx.x;
-    neuralnetptr->layers[0].group[j].value = (double)Inputs[j];
+    neuralnetptr->layers[0].group[j].value = (double)(Inputs[j]) / 128 - 1;
 }
 
 __global__ void diffLast(neuralnetwork *neuralnetptr, double *Expected, double MLRate)
 {
     int j = blockDim.x * blockIdx.x + threadIdx.x; // indexing neurons
-    neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j];
-    n.difference = MLRate * (n.value - Expected[j]);
+    neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].difference =
+     MLRate * (neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].value
+      - Expected[j]);
 }
 __global__ void diffLast(neuralnetwork *neuralnetptr, unsigned char *Expected, double MLRate)
 {
     int j = blockDim.x * blockIdx.x + threadIdx.x;
-    neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j];
-    n.difference = MLRate * (n.value - (double)Expected[j]);
+    neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].difference =
+     MLRate * (neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].value
+      - (double)Expected[j]);
 }
 
 // we need to call InputFirst, (serial) calc, diffLast before calling back
@@ -279,7 +289,7 @@ __global__ void back(neuralnetwork *neuralnetptr)
         //                                                               as finishing neuron
         // so to normalize it, it comes the idea to multiply the experssion below by
         //                     1/(num of toes of n)
-        n.bias -= diff * DActivation(LinearExp, NN.ActivFunc) / (n.toes.NumOfCon);
+        NN.layers[NN.connections->LT].group[NN.connections->ToId].bias -= diff * DActivation(LinearExp, NN.ActivFunc) / (n.toes.NumOfCon);
     }
     __syncthreads();
 }
@@ -299,7 +309,7 @@ __host__ double error(neuralnetwork *neuralnetptr, unsigned char *Expected)
     double k = 0;
     for (int i = 0; i < neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].NumOfNu; i++)
     {
-        printf("the value of neuron %d is %lf and the expected vvalue is %lf\n", i, neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[i].value, Expected[i]);
+        printf("the value of neuron %d is %lf and the expected vvalue is %d\n", i, neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[i].value, Expected[i]);
         k = neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[i].value - Expected[i];
         if ((neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[i].value - Expected[i]) < 0)
         {
