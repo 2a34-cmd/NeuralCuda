@@ -8,15 +8,13 @@ __global__ void diffcalc(neuralnetwork* neuralnetptr,int layerIndex);
 __global__ void InputFirst(neuralnetwork* neuralnetptr, double* Inputs);
 __global__ void diffLast(neuralnetwork* neuralnetptr,double* Expected, double MLRate);
 
-__global__ void back(neuralnetwork* neuralnetptr);
-__global__ void preback(neuralnetwork* neuralnetptr, double* Inputs,double* Expected, double MLRate);
 
 __global__ void InputFirst(neuralnetwork* neuralnetptr, unsigned char* Inputs);
 __global__ void diffLast(neuralnetwork* neuralnetptr,unsigned char* Expected, double MLRate);
 
 __global__ void back(neuralnetwork* neuralnetptr);
-__global__ void preback(neuralnetwork* neuralnetptr, unsigned char* Inputs,unsigned char* Expected, double MLRate);
 
+__host__ void PreBackPropagation(neuralnetwork *neuralnetptr, double **inputs, double **expected, double MLRate, int Count);
 __host__ double error(neuralnetwork* neuralnetptr, double* Expected);
 __host__ double error(neuralnetwork* neuralnetptr, unsigned char* Expected);
 #endif

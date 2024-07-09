@@ -132,134 +132,226 @@ __global__ void diffLast(neuralnetwork *neuralnetptr, double *Expected, double M
 {
     int j = blockDim.x * blockIdx.x + threadIdx.x; // indexing neurons
     neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].difference =
-     MLRate * (neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].value
-      - Expected[j]);
+        MLRate * (neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].value - Expected[j]);
 }
 __global__ void diffLast(neuralnetwork *neuralnetptr, unsigned char *Expected, double MLRate)
 {
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].difference =
-     MLRate * (neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].value
-      - (double)Expected[j]);
+        MLRate * (neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j].value - (double)Expected[j]);
 }
 
 // we need to call InputFirst, (serial) calc, diffLast before calling back
-// this method does that without caring much about parallelizing in best shape
-//      since the methods are fast calculations
-//<<<N,M>>> where N*M = max number of neurons in a layer
-//  since we need to sync the threads (b/c sometimes group[j] is null due to design decission)
-//      M needs to be 1
-__global__ void preback(neuralnetwork *neuralnetptr, double *Inputs, double *Expected, double MLRate)
+//<<<N,M,L>>> where N = number of parallelization, or size of inputs
+// while M = max(number of neurons in layer)
+//  lastly, L = sizeof(double)*2*number of neurons in *nueralnetptr
+__global__ void preback(neuralnetwork *neuralnetptr, double **Inputs, double **Expected, double MLRate, double *globaldiff)
 {
+    extern __shared__ double values[];
+    extern __shared__ double differences[];
+    extern __shared__ int count[];
     int j = threadIdx.x; // indexing neurons
-    if (j < neuralnetptr->layers[0].NumOfNu)
-    {
-        neuralnetptr->layers[0].group[j].value = Inputs[j]; // finished InputFirst
-    }
-
+    int l = blockIdx.x;  // indexing inputs and expected
+    // values is 1D array where element values[l*(num of neurons in NN) +
+    //   (number of neurons in previous layers to layer i) + j] is the value
+    //   of neuron j in layer i using inputs[l]
+    // differences is sorted in the same manner for difference values of neurons
+    // count will have the size of number of layers of NN and
+    //   each element = offset in values and differences for layers.
+    // count job is for caching layer offset as it will be used a lot.
     neuralnetwork NN = *neuralnetptr;
+    if (j < NN.NumOfLayers)
+    {
+        int v = 0;
+        for (int i = 0; i < j; i++)
+        {
+            v += NN.layers[i].NumOfNu;
+        }
+        count[j] = v;
+    } // finished caching
+    __syncthreads();
+
+    if (j < NN.layers[0].NumOfNu)
+    {
+        values[j] = Inputs[l][j];
+    } // finished InputFirst
 
     for (int i = 1; i < NN.NumOfLayers; i++)
     {
         __syncthreads();
         if (j < NN.layers[i].NumOfNu)
         {
-            NuCon Froms = NN.layers[i].group[j].toes;
+            NuCon Toes = NN.layers[i].group[j].toes;
             double weightedSum = NN.layers[i].group[j].bias; // initilized with neuron bias
-            for (int k = 0; k < Froms.NumOfCon; k++)
+            for (int k = 0; k < Toes.NumOfCon; k++)
             {
-                weightedSum += (Froms.ConPtr[k]->weight) * NN.layers[Froms.ConPtr[k]->LF].group[Froms.ConPtr[k]->FromId].value;
+                weightedSum += (Toes.ConPtr[k]->weight) * values[count[Toes.ConPtr[k]->LF] + Toes.ConPtr[k]->FromId];
             }
-            NN.layers[i].group[j].value = Activation(weightedSum, NN.ActivFunc);
+            values[count[i] + j] = Activation(weightedSum, NN.ActivFunc);
         }
     } // finished calc funcitons
     __syncthreads();
-    if (j < neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].NumOfNu)
+    if (j < NN.layers[NN.NumOfLayers - 1].NumOfNu)
     {
-        neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j];
-        n.difference = MLRate * (n.value - Expected[j]);
-    }
-    __syncthreads();
+        differences[count[NN.NumOfLayers] + j] = MLRate *
+                                                 (values[count[NN.NumOfLayers] + j] - Expected[l][j]) / l;
+    } // finished difflast
     for (int i = NN.NumOfLayers - 2; i >= 0; i--)
     {
+        __syncthreads();
         if (j < NN.layers[i].NumOfNu)
         {
             double weightedSum = 0;
             NuCon Froms = NN.layers[i].group[j].froms; // the one used for back probagation
-            for (int l = 0; l < Froms.NumOfCon; l++)
+            for (int n = 0; n < Froms.NumOfCon; n++)
             {
                 double Term = 1;
                 double LinearExp = NN.layers[i].group[j].bias;
                 NuCon Toes = NN.layers[i].group[j].toes; // the one used for calc
                 for (int k = 0; k < Toes.NumOfCon; k++)
                 {
-                    LinearExp += Toes.ConPtr[k]->weight * NN.layers[Toes.ConPtr[k]->LF].group[Toes.ConPtr[k]->FromId].value;
+                    LinearExp += Toes.ConPtr[k]->weight * values[count[Toes.ConPtr[k]->LF] + Toes.ConPtr[k]->FromId];
                 }
                 Term *= DActivation(LinearExp, NN.ActivFunc);
-                Term *= NN.layers[Froms.ConPtr[l]->LT].group[Froms.ConPtr[l]->ToId].difference;
-                Term *= Froms.ConPtr[l]->weight;
+                Term *= differences[count[Froms.ConPtr[n]->LT] + Froms.ConPtr[n]->ToId];
+                Term *= Froms.ConPtr[n]->weight;
                 weightedSum += Term;
                 Term = 1;
             }
-            NN.layers[i].group[j].difference = weightedSum;
-        }
-        __syncthreads();
+            // now differences is holding vectors* with offsets and the goal now is to sum the vectors
+            //*     the vector here has dim of neural network number of neurons
+            differences[count[i] + j] = weightedSum;
+            globaldiff[l * count[NN.NumOfLayers + 1] + count[i] + j] = weightedSum;
+        } // finished diffcalc
     }
+    __syncthreads();
 }
-__global__ void preback(neuralnetwork *neuralnetptr, unsigned char *Inputs, unsigned char *Expected, double MLRate)
+__global__ void preback(neuralnetwork *neuralnetptr, unsigned char **Inputs, unsigned char **Expected, double MLRate,double *globaldiff)
 {
+    extern __shared__ double values[];
+    extern __shared__ double differences[];
+    extern __shared__ int count[];
     int j = threadIdx.x; // indexing neurons
-    if (j < neuralnetptr->layers[0].NumOfNu)
-    {
-        neuralnetptr->layers[0].group[j].value = Inputs[j]; // finished InputFirst
-    }
+    int l = blockIdx.x;  // indexing inputs and expected
+    // values is 1D array where element values[l*(num of neurons in NN) +
+    //   (number of neurons in previous layers to layer i) + j] is the value
+    //   of neuron j in layer i using inputs[l]
+    // differences is sorted in the same manner for difference values of neurons
+    // count will have the size of number of layers of NN and
+    //   each element = offset in values and differences for layers.
+    // count job is for caching layer offset as it will be used a lot.
     neuralnetwork NN = *neuralnetptr;
+    if (j < NN.NumOfLayers)
+    {
+        int v = 0;
+        for (int i = 0; i < j; i++)
+        {
+            v += NN.layers[i].NumOfNu;
+        }
+        count[j] = v;
+    } // finished caching
+    __syncthreads();
+
+    if (j < NN.layers[0].NumOfNu)
+    {
+        values[j] = (double)(Inputs[l][j]) /128;
+    } // finished InputFirst
+
     for (int i = 1; i < NN.NumOfLayers; i++)
     {
         __syncthreads();
         if (j < NN.layers[i].NumOfNu)
         {
-            NuCon Froms = NN.layers[i].group[j].toes;
-            double LinearExp = NN.layers[i].group[j].bias; // initilized with neuron bias
-            for (int k = 0; k < Froms.NumOfCon; k++)
+            NuCon Toes = NN.layers[i].group[j].toes;
+            double weightedSum = NN.layers[i].group[j].bias; // initilized with neuron bias
+            for (int k = 0; k < Toes.NumOfCon; k++)
             {
-                LinearExp += (Froms.ConPtr[k]->weight) * NN.layers[Froms.ConPtr[k]->LF].group[Froms.ConPtr[k]->FromId].value;
+                weightedSum += (Toes.ConPtr[k]->weight) * values[count[Toes.ConPtr[k]->LF] + Toes.ConPtr[k]->FromId];
             }
-            NN.layers[i].group[j].value = Activation(LinearExp, NN.ActivFunc);
+            values[count[i] + j] = Activation(weightedSum, NN.ActivFunc);
         }
     } // finished calc funcitons
     __syncthreads();
-    if (j < neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].NumOfNu)
+    if (j < NN.layers[NN.NumOfLayers - 1].NumOfNu)
     {
-        neuron n = neuralnetptr->layers[neuralnetptr->NumOfLayers - 1].group[j];
-        n.difference = MLRate * (n.value - Expected[j]);
-    } // this funciton initializes last layer differences
+        differences[count[NN.NumOfLayers] + j] = MLRate *
+                                                 (values[count[NN.NumOfLayers] + j] - Expected[l][j]) / l;
+    } // finished difflast
+    for (int i = NN.NumOfLayers - 2; i >= 0; i--)
+    {
+        __syncthreads();
+        if (j < NN.layers[i].NumOfNu)
+        {
+            double weightedSum = 0;
+            NuCon Froms = NN.layers[i].group[j].froms; // the one used for back probagation
+            for (int n = 0; n < Froms.NumOfCon; n++)
+            {
+                double Term = 1;
+                double LinearExp = NN.layers[i].group[j].bias;
+                NuCon Toes = NN.layers[i].group[j].toes; // the one used for calc
+                for (int k = 0; k < Toes.NumOfCon; k++)
+                {
+                    LinearExp += Toes.ConPtr[k]->weight * values[count[Toes.ConPtr[k]->LF] + Toes.ConPtr[k]->FromId];
+                }
+                Term *= DActivation(LinearExp, NN.ActivFunc);
+                Term *= differences[count[Froms.ConPtr[n]->LT] + Froms.ConPtr[n]->ToId];
+                Term *= Froms.ConPtr[n]->weight;
+                weightedSum += Term;
+                Term = 1;
+            }
+            // now differences is holding vectors* with offsets and the goal now is to sum the vectors
+            //*     the vector here has dim of neural network number of neurons
+            differences[count[i] + j] = weightedSum;
+            globaldiff[l * count[NN.NumOfLayers + 1] + count[i] + j] = weightedSum;
+        } // finished diffcalc
+    }
     __syncthreads();
-    // for (int i = NN.NumOfLayers - 2; i >= 0; i--)
-    // {
-    //     if (j < NN.layers[i].NumOfNu)
-    //     {
-    //         double weightedSum = 0;
-    //         NuCon Froms = NN.layers[i].group[j].froms; // the one used for back probagation
-    //         for (int l = 0; l < Froms.NumOfCon; l++)
-    //         {
-    //             double Term = 1;
-    //             double LinearExp = NN.layers[i].group[j].bias;
-    //             NuCon Toes = NN.layers[i].group[j].toes; // the one used for calc
-    //             for (int k = 0; k < Toes.NumOfCon; k++)
-    //             {
-    //                 LinearExp += Toes.ConPtr[k]->weight * NN.layers[Toes.ConPtr[k]->LF].group[Toes.ConPtr[k]->FromId].value;
-    //             }
-    //             Term *= DActivation(LinearExp, NN.ActivFunc);
-    //             Term *= NN.layers[Froms.ConPtr[l]->LT].group[Froms.ConPtr[l]->ToId].difference;
-    //             Term *= Froms.ConPtr[l]->weight;
-    //             weightedSum += Term;
-    //             Term = 1;
-    //         }
-    //         NN.layers[i].group[j].difference = weightedSum;
-    //     }
-    //    __syncthreads();
-    //}
+}
+
+// the function goal is to add all the values from globaldiff as vectors and assign them to the network
+//<<<N,M>>> where N*M = size(globaldiff)/NumOfInputs (or number of neurons in the neural network) 
+__global__ void adding(neuralnetwork* neuralnetptr,double* globaldiff,int NumOfInputs){
+    int j = threadIdx.x;
+    //using Sum as intermediate variable to work as cache 
+    //  instead of using global memory 
+    int Sum = globaldiff[j];
+    for(int i=1;i<NumOfInputs;i++){
+        Sum+= globaldiff[blockDim.x*i+j]; //blockDim.x = M
+    }
+    
+    int layerIndex =0,NeuronIndex = j;
+    while(NeuronIndex > 0){
+        NeuronIndex -= neuralnetptr->layers[layerIndex].NumOfNu;
+        layerIndex+=1;
+    }
+    neuralnetptr->layers[layerIndex].group[NeuronIndex].difference = Sum;
+}
+// the function below utilize the parallelization of gpu by back propagation the network with different inputs
+//   however, as a price, it needs more memory since there will be deep copies.
+/// @brief this function will evaluate all the differences of neurons from array of inputs and expected results with the supplied count
+/// @param neuralnetptr this is neural network pointer
+/// @param inputs array of values (array of value to first layer neurons)
+/// @param expected array of values (array of expected value from last layer neurons)
+/// @param MLRate a parameter that controls speed of changing the hidden parameters (biases and wieghts)
+/// @param Count size of inputs and expected (it's needed to protect from segmentation fault)
+/// @return nothing, neuralnetptr pointed struct will change
+__host__ void PreBackPropagation(neuralnetwork *neuralnetptr, double **inputs, double **expected, double MLRate, int Count)
+{
+    int sum = neuralnetptr->layers[0].NumOfNu;
+    int max = sum;
+    for(int i=1;i<neuralnetptr->NumOfLayers;i++){
+        sum+= neuralnetptr->layers[i].NumOfNu;
+        if(neuralnetptr->layers[i].NumOfNu > max){
+            max = neuralnetptr->layers[i].NumOfNu;
+        }
+    }
+    double* globaldiff;
+    cudaMalloc((void**)&globaldiff,sizeof(double)*Count*sum);
+    preback<<<Count,max,sizeof(double)*sum*2>>>(neuralnetptr,inputs,expected,MLRate,globaldiff);
+    cudaDeviceSynchronize();
+    adding<<<1,sum>>>(neuralnetptr,globaldiff,Count);
+    cudaDeviceSynchronize();
+    cudaFree(globaldiff);
 }
 
 //<<<N,M>>> where N*M == number of connections
