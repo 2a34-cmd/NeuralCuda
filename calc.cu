@@ -377,21 +377,49 @@ __global__ void adding(neuralnetwork *neuralnetptr, double *globaldiff, double *
 /// @return nothing, neuralnetptr pointed struct will change
 __host__ void PreBackPropagation(neuralnetwork *neuralnetptr, double **inputs, double **expected, double MLRate, int Count)
 {
-    int sum = neuralnetptr->layers[0].NumOfNu;
-    int max = sum;
-    for(int i=1;i<neuralnetptr->NumOfLayers;i++){
-        sum+= neuralnetptr->layers[i].NumOfNu;
-        if(neuralnetptr->layers[i].NumOfNu > max){
+    int sum = neuralnetptr->layers[0].NumOfNu; // the number of neurons in *neuralnetptr
+    int max = sum;                             // maximium number of neurons in layer of *neuralnetptr
+    for (int i = 1; i < neuralnetptr->NumOfLayers; i++)
+    {
+        sum += neuralnetptr->layers[i].NumOfNu;
+        if (neuralnetptr->layers[i].NumOfNu > max)
+        {
             max = neuralnetptr->layers[i].NumOfNu;
         }
     }
-    double* globaldiff;
-    cudaMalloc((void**)&globaldiff,sizeof(double)*Count*sum);
-    preback<<<Count,max,sizeof(double)*sum*2>>>(neuralnetptr,inputs,expected,MLRate,globaldiff);
+    double *globaldiff, *globalval;
+    cudaMalloc((void **)&globaldiff, sizeof(double) * Count * sum);
+    cudaMalloc((void **)&globalval, sizeof(double) * Count * sum);
+    int rootSum = (int)ceil((double)sum/32.0);
+    preback<<<Count, max, sizeof(int) * (neuralnetptr->NumOfLayers + 1) + sizeof(double) * sum * 2>>>(neuralnetptr, inputs, expected, MLRate, globaldiff, globalval);
     cudaDeviceSynchronize();
-    adding<<<1,sum>>>(neuralnetptr,globaldiff,Count);
+    adding<<<rootSum,32>>>(neuralnetptr, globaldiff, globalval, Count,sum);
     cudaDeviceSynchronize();
     cudaFree(globaldiff);
+    cudaFree(globalval);
+}
+__host__ void PreBackPropagation(neuralnetwork *neuralnetptr, unsigned char **inputs, unsigned char **expected, double MLRate, int Count)
+{
+    int sum = neuralnetptr->layers[0].NumOfNu;
+    int max = sum;
+    for (int i = 1; i < neuralnetptr->NumOfLayers; i++)
+    {
+        sum += neuralnetptr->layers[i].NumOfNu;
+        if (neuralnetptr->layers[i].NumOfNu > max)
+        {
+            max = neuralnetptr->layers[i].NumOfNu;
+        }
+    }
+    double *globaldiff, *globalval;
+    cudaMalloc((void **)&globaldiff, sizeof(double) * Count * sum);
+    cudaMalloc((void **)&globalval, sizeof(double) * Count * sum);
+    size_t dynamicShared = sizeof(int)*(neuralnetptr->NumOfLayers+1) + sizeof(double)*sum*2;
+    int rootSum = (int)ceil((double)sum/32.0);
+    preback<<<Count,max,dynamicShared>>>(neuralnetptr,inputs,expected,MLRate,globaldiff,globalval);
+    adding<<<rootSum, 32>>>(neuralnetptr, globaldiff, globalval, Count,sum);
+    cudaDeviceSynchronize();
+    cudaFree(globaldiff);
+    cudaFree(globalval);
 }
 
 //<<<N,M>>> where N*M == number of connections
