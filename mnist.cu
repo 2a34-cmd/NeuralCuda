@@ -42,6 +42,8 @@ int swap(int d)
 /// @param startingPos
 /// @return
 
+//[deprecated]
+//
 // this method takes both image path which has the inputs and label path which has the ouputs
 // in return of list pointer of image struct
 image *Mnist(string ImagePAth, string LabelPath, int startingPos)
