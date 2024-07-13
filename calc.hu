@@ -15,6 +15,7 @@ __global__ void diffLast(neuralnetwork* neuralnetptr,unsigned char* Expected, do
 __global__ void back(neuralnetwork* neuralnetptr);
 
 __host__ void PreBackPropagation(neuralnetwork *neuralnetptr, double **inputs, double **expected, double MLRate, int Count);
+__host__ void PreBackPropagation(neuralnetwork *neuralnetptr, unsigned char **inputs, unsigned char**expected, double MLRate, int Count);
 __host__ double error(neuralnetwork* neuralnetptr, double* Expected);
 __host__ double error(neuralnetwork* neuralnetptr, unsigned char* Expected);
 #endif
