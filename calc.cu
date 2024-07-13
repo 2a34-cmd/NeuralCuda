@@ -163,22 +163,23 @@ __global__ void diffLast(neuralnetwork *neuralnetptr, unsigned char *Expected, d
 //<<<N,M,L>>> where N = number of parallelization, or size of inputs
 // while M = max(number of neurons in layer)
 //  lastly, L = sizeof(double)*2*number of neurons in *nueralnetptr
-__global__ void preback(neuralnetwork *neuralnetptr, double **Inputs, double **Expected, double MLRate, double *globaldiff)
+__global__ void preback(neuralnetwork *neuralnetptr, double **Inputs, double **Expected, double MLRate, double *globaldiff, double *globalval)
 {
-    extern __shared__ double values[];
-    extern __shared__ double differences[];
-    extern __shared__ int count[];
-    int j = threadIdx.x; // indexing neurons
-    int l = blockIdx.x;  // indexing inputs and expected
-    // values is 1D array where element values[l*(num of neurons in NN) +
-    //   (number of neurons in previous layers to layer i) + j] is the value
+    extern __shared__ char s[]; // using char b/c sizeof(char) = 1 byte
+    int *count = (int *)s;      // the same meaning as &s[0]
+    int j = threadIdx.x;        // indexing neurons
+    int l = blockIdx.x;         // indexing inputs and expected
+    // values is 1D array where element values[(number of neurons in previous layers to layer i)
+    //       + j] is the value
     //   of neuron j in layer i using inputs[l]
     // differences is sorted in the same manner for difference values of neurons
     // count will have the size of number of layers of NN and
     //   each element = offset in values and differences for layers.
     // count job is for caching layer offset as it will be used a lot.
+    // globalval and globaldiff are arrays in global memory that hold the values and differences
+    //  of each block shared memory in ordered shape.
     neuralnetwork NN = *neuralnetptr;
-    if (j < NN.NumOfLayers)
+    if (j <= NN.NumOfLayers)
     {
         int v = 0;
         for (int i = 0; i < j; i++)
@@ -188,10 +189,12 @@ __global__ void preback(neuralnetwork *neuralnetptr, double **Inputs, double **E
         count[j] = v;
     } // finished caching
     __syncthreads();
-
+    double *values = (double *)(sizeof(int) * (NN.NumOfLayers + 1) + s); //
+    double *differences = (double *)(sizeof(double) * count[NN.NumOfLayers] + sizeof(int) * (NN.NumOfLayers + 1) + s);
     if (j < NN.layers[0].NumOfNu)
     {
         values[j] = Inputs[l][j];
+        globalval[l * count[NN.NumOfLayers] + j] = values[j];
     } // finished InputFirst
 
     for (int i = 1; i < NN.NumOfLayers; i++)
@@ -206,15 +209,17 @@ __global__ void preback(neuralnetwork *neuralnetptr, double **Inputs, double **E
                 weightedSum += (Toes.ConPtr[k]->weight) * values[count[Toes.ConPtr[k]->LF] + Toes.ConPtr[k]->FromId];
             }
             values[count[i] + j] = Activation(weightedSum, NN.ActivFunc);
+            globalval[l * count[NN.NumOfLayers] + count[i] + j] = values[count[i] + j];
         }
     } // finished calc funcitons
     __syncthreads();
     if (j < NN.layers[NN.NumOfLayers - 1].NumOfNu)
     {
-        differences[count[NN.NumOfLayers] + j] = MLRate *
-                                                 (values[count[NN.NumOfLayers] + j] - Expected[l][j]) / l;
+        differences[count[NN.NumOfLayers - 1] + j] = MLRate *
+                                                     (values[count[NN.NumOfLayers - 1] + j] - Expected[l][j]);
+        globaldiff[l * count[NN.NumOfLayers] + count[NN.NumOfLayers] + j] = differences[count[NN.NumOfLayers] + j];
     } // finished difflast
-    for (int i = NN.NumOfLayers - 2; i >= 0; i--)
+    for (int i = NN.NumOfLayers - 2; i > 0; i--)
     {
         __syncthreads();
         if (j < NN.layers[i].NumOfNu)
@@ -239,27 +244,25 @@ __global__ void preback(neuralnetwork *neuralnetptr, double **Inputs, double **E
             // now differences is holding vectors* with offsets and the goal now is to sum the vectors
             //*     the vector here has dim of neural network number of neurons
             differences[count[i] + j] = weightedSum;
-            globaldiff[l * count[NN.NumOfLayers + 1] + count[i] + j] = weightedSum;
+            globaldiff[l * count[NN.NumOfLayers] + count[i] + j] = weightedSum;
         } // finished diffcalc
     }
     __syncthreads();
 }
-__global__ void preback(neuralnetwork *neuralnetptr, unsigned char **Inputs, unsigned char **Expected, double MLRate,double *globaldiff)
+__global__ void preback(neuralnetwork *neuralnetptr, unsigned char **Inputs, unsigned char **Expected, double MLRate, double *globaldiff, double *globalval)
 {
-    extern __shared__ double values[];
-    extern __shared__ double differences[];
-    extern __shared__ int count[];
-    int j = threadIdx.x; // indexing neurons
-    int l = blockIdx.x;  // indexing inputs and expected
-    // values is 1D array where element values[l*(num of neurons in NN) +
-    //   (number of neurons in previous layers to layer i) + j] is the value
-    //   of neuron j in layer i using inputs[l]
+    extern __shared__ char s[]; // using char b/c sizeof(char) = 1 byte
+    int *count = (int *)s;      // the same meaning as &s[0]
+    int j = threadIdx.x;        // indexing neurons
+    int l = blockIdx.x;         // indexing inputs and expected
+    // values is 1D array where element values[(number of neurons in previous layers to layer i)
+    //   + j] is the value of neuron j in layer i using inputs[l]
     // differences is sorted in the same manner for difference values of neurons
     // count will have the size of number of layers of NN and
     //   each element = offset in values and differences for layers.
     // count job is for caching layer offset as it will be used a lot.
     neuralnetwork NN = *neuralnetptr;
-    if (j < NN.NumOfLayers)
+    if (j <= NN.NumOfLayers)
     {
         int v = 0;
         for (int i = 0; i < j; i++)
@@ -269,10 +272,13 @@ __global__ void preback(neuralnetwork *neuralnetptr, unsigned char **Inputs, uns
         count[j] = v;
     } // finished caching
     __syncthreads();
+    double *values = (double *)(sizeof(int) * (NN.NumOfLayers + 1) + s);
+    double *differences = (double *)(sizeof(double) * count[NN.NumOfLayers] + sizeof(int) * (NN.NumOfLayers + 1) + s);
 
     if (j < NN.layers[0].NumOfNu)
     {
-        values[j] = (double)(Inputs[l][j]) /128;
+        values[j] = (double)(Inputs[l][j]) / 128.0;
+        globalval[l * count[NN.NumOfLayers] + j] = values[j];
     } // finished InputFirst
 
     for (int i = 1; i < NN.NumOfLayers; i++)
@@ -287,15 +293,18 @@ __global__ void preback(neuralnetwork *neuralnetptr, unsigned char **Inputs, uns
                 weightedSum += (Toes.ConPtr[k]->weight) * values[count[Toes.ConPtr[k]->LF] + Toes.ConPtr[k]->FromId];
             }
             values[count[i] + j] = Activation(weightedSum, NN.ActivFunc);
+            globalval[l * count[NN.NumOfLayers] + count[i] + j] = values[count[i] + j];
         }
     } // finished calc funcitons
     __syncthreads();
     if (j < NN.layers[NN.NumOfLayers - 1].NumOfNu)
     {
-        differences[count[NN.NumOfLayers] + j] = MLRate *
-                                                 (values[count[NN.NumOfLayers] + j] - Expected[l][j]) / l;
+        differences[count[NN.NumOfLayers - 1] + j] = MLRate *
+                                                     (values[count[NN.NumOfLayers - 1] + j] - Expected[l][j]);
+        globaldiff[l * count[NN.NumOfLayers] + count[NN.NumOfLayers - 1] + j] =
+            differences[count[NN.NumOfLayers - 1] + j];
     } // finished difflast
-    for (int i = NN.NumOfLayers - 2; i >= 0; i--)
+    for (int i = NN.NumOfLayers - 2; i > 0; i--)
     {
         __syncthreads();
         if (j < NN.layers[i].NumOfNu)
@@ -320,7 +329,7 @@ __global__ void preback(neuralnetwork *neuralnetptr, unsigned char **Inputs, uns
             // now differences is holding vectors* with offsets and the goal now is to sum the vectors
             //*     the vector here has dim of neural network number of neurons
             differences[count[i] + j] = weightedSum;
-            globaldiff[l * count[NN.NumOfLayers + 1] + count[i] + j] = weightedSum;
+            globaldiff[l * count[NN.NumOfLayers] + count[i] + j] = weightedSum;
         } // finished diffcalc
     }
     __syncthreads();
