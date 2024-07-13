@@ -1,6 +1,6 @@
-flags:= -g -G
+flags:=
 Obj= program.o calc.o file.o mnist.o holders.o
-args= version10.mn1 img.idx3 lbl.idx1 0 0.5
+args= version10.mn1 img.idx3 lbl.idx1 0 0.5 50
 
 
 all:program
@@ -21,4 +21,4 @@ clean:
 
 
 run:program
-	program $(args)
+	./program $(args)
