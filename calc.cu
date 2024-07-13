@@ -1,7 +1,25 @@
 #include <math.h>
 #include "holders.hpp"
 #include <stdio.h>
+#include <cuda_runtime.h>
+#include <cuda.h>
 using namespace std;
+
+#define gpuErrchk(ans)                        \
+    {                                         \
+        gpuAssert((ans), __FILE__, __LINE__); \
+    }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true)
+{
+    if (code != cudaSuccess)
+    {
+        const char* s = cudaGetErrorString(code);
+
+        fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+        if (abort)
+            exit(code);
+    }
+}
 
 // the activation function and its derviative
 __device__ double Activation(double input, ActivationFunc af)
