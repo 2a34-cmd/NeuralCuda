@@ -336,22 +336,35 @@ __global__ void preback(neuralnetwork *neuralnetptr, unsigned char **Inputs, uns
 }
 
 // the function goal is to add all the values from globaldiff as vectors and assign them to the network
-//<<<N,M>>> where N*M = size(globaldiff)/NumOfInputs (or number of neurons in the neural network) 
-__global__ void adding(neuralnetwork* neuralnetptr,double* globaldiff,int NumOfInputs){
-    int j = threadIdx.x;
-    //using Sum as intermediate variable to work as cache 
-    //  instead of using global memory 
-    int Sum = globaldiff[j];
-    for(int i=1;i<NumOfInputs;i++){
-        Sum+= globaldiff[blockDim.x*i+j]; //blockDim.x = M
+//<<<N,M>>> where N*M > size(globaldiff)/NumOfInputs (or number of neurons in the neural network)
+__global__ void adding(neuralnetwork *neuralnetptr, double *globaldiff, double *globalval, int NumOfInputs,int NumofNeurons)
+{
+    int j = threadIdx.x + blockDim.x*blockIdx.x;
+    // using Sum as intermediate variable to work as cache
+    //   instead of using global memory
+    if(j<NumofNeurons){
+    double Sum = globaldiff[j];
+    double Val = globalval[j];
+    for (int i = 1; i < NumOfInputs; i++)
+    {
+        Sum += globaldiff[NumofNeurons * i + j];
+        Val += globalval[NumofNeurons * i + j];
     }
-    
-    int layerIndex =0,NeuronIndex = j;
-    while(NeuronIndex > 0){
+    Sum /= NumOfInputs;
+    Val /= NumOfInputs;
+    int layerIndex = 0, NeuronIndex = j;
+    while (NeuronIndex > 0)
+    {
+        if(neuralnetptr->layers[layerIndex].NumOfNu > NeuronIndex){
+            break;
+        }
         NeuronIndex -= neuralnetptr->layers[layerIndex].NumOfNu;
-        layerIndex+=1;
+        layerIndex += 1;
     }
     neuralnetptr->layers[layerIndex].group[NeuronIndex].difference = Sum;
+    neuralnetptr->layers[layerIndex].group[NeuronIndex].value = Val;
+    }
+    __syncthreads();
 }
 // the function below utilize the parallelization of gpu by back propagation the network with different inputs
 //   however, as a price, it needs more memory since there will be deep copies.
