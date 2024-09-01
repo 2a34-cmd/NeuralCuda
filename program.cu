@@ -15,15 +15,15 @@
 // 4- the index of first image to be trained
 // 5- learning rate
 // 6- number of parallel blocks where each one handle one of input/expected output training 
-
+// 4- the index of last image to be trained
 int main(int argc,char *argv[]){
     //int GPUId = cudaGetDevice(&GPUId);
     printf("%d is num of args\n",argc);
-    if(argc != 7){
+    if(argc != 8){
         printf("there must be 6 arguments\n");
         return -1;
     }
-    int Stp = stoi(argv[4]),mlR = stod(argv[5]), pN = stoi(argv[6]);
+    int Stp = stoi(argv[4]),mlR = stod(argv[5]), pN = stoi(argv[6]), Li = stoi(argv[7]);
     // unifed (accessible from both CPU & GPU) pointer to neural network
     neuralnetwork* NNp;
     cudaError_t err = cudaMallocManaged((void**)&NNp,sizeof(neuralnetwork));
@@ -50,7 +50,7 @@ int main(int argc,char *argv[]){
     string v = "";
     EFNN = ExpectedFromNN(EFNN,argv[3],Stp);
     // reapeting from starting point until reaching number of training epsidoes (which is 60,000)
-    for (int i = Stp; i < 10000; i+=pN)
+    for (int i = Stp; i < Li; i+=pN)
     {
         PreBackPropagation(NNp,&ITNN[i],&EFNN[i],mlR,pN);
         cudaDeviceSynchronize();
