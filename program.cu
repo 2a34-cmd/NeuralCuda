@@ -15,7 +15,7 @@
 // 4- the index of first image to be trained
 // 5- learning rate
 // 6- number of parallel blocks where each one handle one of input/expected output training 
-// 4- the index of last image to be trained
+// 7- the index of last image to be trained
 int main(int argc,char *argv[]){
     //int GPUId = cudaGetDevice(&GPUId);
     printf("%d is num of args\n",argc);
