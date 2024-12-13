@@ -1,5 +1,7 @@
-#include "file.hpp"
+#include "../header files/file.hpp"
 #include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <fstream>
@@ -43,18 +45,18 @@ NueralNet file(string fN){
             NN.nId = (int) buffer.front();
             NN.ActivationFunction = (ActivationFunc)(int) buffer.back();
         }
-        if(exists("l")){
+        else if(exists("l")){
             LayerC layer((int)buffer.back());
             NN.layers.push_back(layer);
         }
-        if(exists("nu")){
+        else if(exists("nu")){
             NuC nu((int)buffer.front(),buffer.back());
             // neuron nu;
             // nu.bias = buffer.back();
             // nu.id = (int)buffer.front();
-            NN.layers[NN.layers.size() -1].Neurons.push_back(nu);
+            NN.layers.at(NN.layers.size() -1).Neurons.push_back(nu);
         }
-        if(exists("[")){
+        else if(exists("[")){
             connection conn;
             buffer.pop_back();
             conn.weight = buffer.back();
@@ -72,8 +74,17 @@ NueralNet file(string fN){
             conn.LF = buffer.back();
             
             NN.cons.push_back(conn);
-            NN.layers[conn.LT].Neurons[conn.ToId].toes++;
-            NN.layers[conn.LF].Neurons[conn.FromId].froms++;
+            NN.layers.at(conn.LT).Neurons.at(conn.ToId).toes++;
+            NN.layers.at(conn.LF).Neurons.at(conn.FromId).froms++;
+        }
+        else if(exists("arr")){
+            double num = buffer.at(0);
+            if(NN.layers.size() ==1){
+                for(int i =0;i< num ;i++){
+                    NuC nu(i,0);
+                    NN.layers.at(0).Neurons.push_back(nu);
+                }
+            }
         }
         buffer.clear();
     }
@@ -173,29 +184,35 @@ neuralnetwork FromFile(string fileName){
 //    by struct pointed by NNp
 void ToFile(string fileName,neuralnetwork* NNp){
     std::string line;
-    ofstream Writer(fileName);
+    ofstream Writer;
+    Writer.open(fileName);
     if(!Writer.is_open()){
         cout<< "there are problems, output file stream isn't working";
         return;
     }
-    Writer << "s\n";;
+    Writer << "s\n";
+    
     line = "net" + to_string(NNp->nId) + ":" + to_string(static_cast<int>(NNp->ActivFunc));
+    
     Writer << line << ";\n";
-    for(int i=0;i<(NNp->NumOfLayers);i++){
+
+
+    Writer << "l0;\narr" << to_string(NNp->layers[0].NumOfNu) << ";\n";
+    for(int i=1;i<(NNp->NumOfLayers);i++){
         line = "l" + to_string(i);
-        Writer << line << ";\n";;
+        Writer << line << ";\n";
         for(int j =0;j<(NNp->layers[i].NumOfNu);j++){
             line = "nu " + to_string(j) + " : " + to_string(NNp->layers[i].group[j].bias);
             Writer << line << ";\n";
         }
     }
 
-    Writer << "c\n";;
+    Writer << "c\n";
     for(int i =0; i< (NNp->NumOfConnenction); i++){
         connection con = NNp->connections[i];
         line = "[" + to_string(con.LF) + "," + to_string(con.FromId) + "][" +
             to_string(con.LT) + "," + to_string(con.ToId) + "]" + to_string(con.weight);
-        Writer << line << ":0;\n";;
+        Writer << line << ":0;\n";
     }
 
     Writer.flush();
