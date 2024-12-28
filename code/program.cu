@@ -8,16 +8,7 @@
 #include "../header files/mnist.hpp"
 #include "../header files/calc.hu"
 
-#define CPUbefore(layerindex){\
-        for(int k=0; k<10;k++){\
-            printf("value of neuron %d in layer %d in cpu before calc is %lf\n",k,layerindex,NNp->layers[layerindex].group[k].value);\
-        }\
-}
-#define CPUafter(layerindex){\
-    for(int k=0; k<10;k++){\
-        printf("value of neuron %d in layer %d in cpu after calc is %lf\n",k,layerindex,NNp->layers[layerindex].group[k].value);\
-    }\
-}
+#define THRESHOLD 0.0001f
 
 // fun fact: argv[0] = name of the program
 
@@ -36,14 +27,20 @@ __global__ void Debugkernel(neuralnetwork* nptr, double* expected){
 
 
 int main(int argc,char *argv[]){
-    clock_t t1,t2;
+    clock_t t1,t2; //for timing learning cycle 
+    
+    // sometimes, error difference can be negative b/c learning rate is big and overshoot the minimum
+    // and sometimes, error difference is so small b/c learning rate is small so we need to build up momentum
+    // thus new mLR = mlR * exp(error_difference)
+    double OldError =0.0f, PresentError = 0.0f;
+    bool IserrGotNeg = false;
     //int GPUId = cudaGetDevice(&GPUId);
-    printf("%d is num of args\n",argc);
     if(argc != 8){
         printf("there must be 7 arguments. thier number is %d\n",argc-1);
         return -1;
     }
-    int Stp = stoi(argv[4]),mlR = stod(argv[5]), pN = stoi(argv[6]), Li = stoi(argv[7]);
+    double mlR = stod(argv[5]);
+    int pN = stoi(argv[6]), Li = stoi(argv[7]), Stp = stoi(argv[4]);
     // unifed (accessible from both CPU & GPU) pointer to neural network
     neuralnetwork* NNp;
     cudaError_t err = cudaMallocManaged((void**)&NNp,sizeof(neuralnetwork));
@@ -89,12 +86,36 @@ int main(int argc,char *argv[]){
             diffcalc<<<(-22*j+25),32>>>(NNp,j);
             cudaDeviceSynchronize();
         }
+
+
+        OldError = PresentError;
+        PresentError = error(NNp,EFNN[i]);
+        if(i==Stp){
+            OldError = PresentError;
+        }
+
+
+        if(OldError > PresentError){
+            if(!IserrGotNeg){
+                mlR *= exp(OldError - PresentError);
+            }
+        }else{
+            IserrGotNeg = true;
+            mlR *= exp(OldError - PresentError);
+        }
+
+        if(mlR <= THRESHOLD){
+            printf("since learning rate is smaller then threshold, program is finished learning\n");
+            printf("learning rate is %lf\n",mlR);
+            break;
+        }
         t2 = clock();
-        printf("iteration %d : error %lf which needed %lf seconds\n",i,error(NNp,EFNN[i]),((double)t2 - (double)t1)/CLOCKS_PER_SEC);
+        printf("iteration %d : error %lf which needed %lf seconds\n",i,PresentError,((double)t2 - (double)t1)/CLOCKS_PER_SEC);
         cudaDeviceSynchronize();
         back<<<397,160>>>(NNp);
         cudaDeviceSynchronize();
     }
+    printf("learning rate is %lf\n",mlR);
     cudaFree(ITNN);
     cudaFree(EFNN);
     ToFile("version11.mn1",NNp);

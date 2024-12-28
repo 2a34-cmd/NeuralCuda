@@ -6,19 +6,6 @@
 using namespace std;
 
 
-#define GPUbefore(layerindex){\
-if(j<10){\
-    printf("value of neuron %d in layer %d in gpu before calc is %lf\n",j,layerindex,neuralnetptr->layers[layerindex].group[j].value);\
-}\
-}
-#define GPUafter(layerindex){\
-if(j<10){\
-    printf("value of neuron %d in layer %d in gpu after calc is %lf\n",j,layerindex,neuralnetptr->layers[layerindex].group[j].value);\
-}\
-}
-
-
-
 #define gpuErrchk(ans)                        \
     {                                         \
         gpuAssert((ans), __FILE__, __LINE__); \

@@ -2,6 +2,7 @@ cpu.*
 cuda.*
 .vscode/**
 test/**
+build
 program.cpp
 **.exe
 mnist.cpp
@@ -10,3 +11,7 @@ mnist.cpp
 **.pdb
 **.txt
 **.o
+mnist
+.gitignore
+helper/**
+!helper/randomNN.py
