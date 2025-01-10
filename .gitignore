@@ -15,7 +15,7 @@ mnist
 .gitignore
 helper/**
 !helper/randomNN.py
-!helper/server
+!helper/server/**
 # TO-DO: 
 #   1- make testing program (a way to measure error of the system)
 #   2-make webpage to test the trained neural network on 28*28 pixels canvas
