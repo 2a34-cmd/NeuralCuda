@@ -9,8 +9,8 @@
         display: none;
     }
     html,body{
-        color: rgb(227, 227, 227);
-        background-color: rgb(40,40,40);
+        color: rgb(255, 255, 255);
+        background-color: rgb(31, 31, 31);
         height: 100%;
         width: 100%;
     }
@@ -57,18 +57,37 @@ canvas {
     aspect-ratio: 1;
     min-width: 28px;
     width: 100%;
-    border: 2px solid red;
+    border: 2px solid rgb(255, 0, 0);
     cursor:crosshair;
     background-color: #000000;
     image-rendering: pixelated;
 }
+
 .statements {
-    flex-grow: 0.5;
+    flex-grow: 0.7;
     display:  flex;
     min-height: 12em;
     min-width: min-content;
+    align-items: center;
+    justify-content: space-evenly;
     flex-basis: 12em;
     flex-direction: column;
-    background-color: aqua;
-    margin: 10px;
+}
+.butttons{
+    display:  flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+}
+
+input[type="button"]{
+    background-color: rgba(68, 0, 255, 0.8);
+    color: darkmagenta;
+    border-width: 0;
+    margin: 0 10%;
+    padding: 0.5em 20%;
+}
+input[type="button"]:active{
+    background-color: rgb(34, 195, 42);
+    color: rgba(255, 0, 0, 0.786);
 }
