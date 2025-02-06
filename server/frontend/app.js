@@ -1,7 +1,8 @@
 const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext('2d',{ willReadFrequently: true });
-ctx.set
-
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const p = document.createElement("span",{id: "err"});
+const statements = document.querySelector(".statements");
+let Removed = document.getElementById("err");
 
 // Internal canvas size
 const pixelWidth = 28;
@@ -9,34 +10,62 @@ const pixelHeight = 28;
 
 // Variables for drawing
 let isDrawing = false;
-let lineWidth = 1;
+let lineWidth = 3;
 let sigma = 1;
 let drawColor = "White"
 
-let gaussian = false;
-function Kernel(){
+let gaussian = true;
+function Kernel() {
     let kernel = [];
-    let mean = (lineWidth-1)/2;
+    let mean = (lineWidth - 1) / 2;
     let sum = 0.0;
-    for(let x=0;x< lineWidth;x++){
-            kernel[x] = Math.exp(-0.5* Math.pow((x-mean)/sigma,2));
-            sum += kernel[x];
+    for (let x = 0; x < lineWidth; x++) {
+        kernel[x] = Math.exp(-0.5 * Math.pow((x - mean) / sigma, 2));
+        sum += kernel[x];
     }
-    for(let x=0; x<lineWidth; x++){
-            kernel[x] /= sum;
-        }
+    for (let x = 0; x < lineWidth; x++) {
+        kernel[x] /= sum;
+    }
     return kernel;
 }
 // Resize canvas to make each "pixel" visually large
 function resizeCanvas() {
 
-    const aspectRatio = window.innerWidth/window.innerHeight;
+    const aspectRatio = window.innerWidth / window.innerHeight;
     let direction = "row";
-    if(aspectRatio < 1){
+    if (aspectRatio < 1) {
         direction = "column"
     }
 
-    document.documentElement.style.setProperty('--flex_direction',direction);
+    document.documentElement.style.setProperty('--flex_direction', direction);
+}
+
+function Neural() {
+    const str = ctx.getImageData(0, 0, pixelWidth, pixelHeight).data //the rgba data
+        .filter((t, i) => { return i % 4 === 1 }) // get red(grayscale) values
+        .reduce((p, c) => { return p + ',' + c.toString()  });//encode as charecter 
+    return str;
+}
+
+function SendRecv() {
+    const str = Neural();
+    fetch(`results.data/${str}`, {
+        method: "GET"
+    })
+    .then((res) => {
+        if (!res.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return res.text();
+    }).then((data) => {
+        if(Removed !== null){statements.removeChild(Removed);}
+        for (let i = 0; i < 10; i++) {
+            document.getElementById("num" + i).textContent = data.split(',')[i];
+        }
+    }).catch((err) => {
+        p.innerText = `Error : ${err.message}`;
+        if(!statements.contains(Removed)){statements.appendChild(p);}
+    });
 }
 
 // Update the stroke width dynamically when the slider is used
@@ -47,9 +76,9 @@ document.getElementById("stroke-width").addEventListener("input", (e) => {
 document.getElementById("sigma").addEventListener("input", (e) => {
     sigma = Number(e.target.value);
     document.getElementById("sigmaValue").textContent = sigma;
-    if(sigma === 0){
+    if (sigma === 0) {
         document.getElementById("gaussian").style.backgroundColor = "#000000"
-    }else{
+    } else {
         document.getElementById("gaussian").style.backgroundColor = "#ffffff"
     }
 });
@@ -78,6 +107,7 @@ canvas.addEventListener("mousedown", (e) => {
 
 canvas.addEventListener("mouseup", () => {
     isDrawing = false;
+    SendRecv();
 });
 
 canvas.addEventListener("mousemove", (e) => {
@@ -93,34 +123,34 @@ function drawPixel(x, y) {
     ctx.lineWidth = lineWidth;
 
     // Draw a filled square representing the "pixel"
-    if(!gaussian){
-        ctx.fillRect(x-Math.floor(lineWidth/2), y-Math.floor(lineWidth/2), lineWidth, lineWidth);
-    }else{
+    if (!gaussian) {
+        ctx.fillRect(x - Math.floor(lineWidth / 2), y - Math.floor(lineWidth / 2), lineWidth, lineWidth);
+    } else {
         let K = Kernel();
-        for(let i=x-Math.floor(lineWidth/2); i<x+lineWidth-Math.floor(lineWidth/2) ; i++){
-            for(let j=y-Math.floor(lineWidth/2); j<y+lineWidth-Math.floor(lineWidth/2) ; j++){
-                var color = ctx.getImageData(i,j,1,1).data[0]; //it'll get red value, and it's enough since the image is black-white gradiant
-                var colorValue = Math.min(255,Math.floor(color + 255*K[i-x+Math.floor(lineWidth/2)]*K[j-y+Math.floor(lineWidth/2)]));
+        for (let i = x - Math.floor(lineWidth / 2); i < x + lineWidth - Math.floor(lineWidth / 2); i++) {
+            for (let j = y - Math.floor(lineWidth / 2); j < y + lineWidth - Math.floor(lineWidth / 2); j++) {
+                var color = ctx.getImageData(i, j, 1, 1).data[0]; //it'll get red value, and it's enough since the image is black-white gradiant
+                var colorValue = Math.min(255, Math.floor(color + 255 * K[i - x + Math.floor(lineWidth / 2)] * K[j - y + Math.floor(lineWidth / 2)]));
                 ctx.fillStyle = `rgb(${colorValue},${colorValue},${colorValue})`;
-                ctx.fillRect(i,j,1,1);
+                ctx.fillRect(i, j, 1, 1);
             }
         }
     }
 }
-document.getElementById("clear").addEventListener("click",()=>{
+document.getElementById("clear").addEventListener("click", () => {
     ctx.fillStyle = "Black"
-    ctx.fillRect(0,0,28,28);
+    ctx.fillRect(0, 0, 28, 28);
 
 });
 
-document.getElementById("gaussian").addEventListener("click",()=>{
+document.getElementById("gaussian").addEventListener("click", () => {
     gaussian = !gaussian;
-    if(gaussian){
+    if (gaussian) {
         document.getElementById("sigma").disabled = false;
-        if(sigma !== 0){
+        if (sigma !== 0) {
             document.getElementById("gaussian").style.backgroundColor = "#ffffff"
         }
-    }else{
+    } else {
         document.getElementById("gaussian").style.backgroundColor = "#000000"
         document.getElementById("sigma").disabled = true;
     }

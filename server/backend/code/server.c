@@ -1,14 +1,22 @@
 #include <sys/socket.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <stdlib.h>
 #include <unistd.h>
-#include "./handle.h"
+#include <pthread.h>
+#include "../header/handle.h"
 
 #define PORT 2500
-#define BLOG 6
+
+uint16_t Working = 0;
 
 int main(void)
 {
+    pthread_t queuer;
+    int queuerId;
+    char CommandCharecter = 'I';
+    char* fN = "../../frontend/version11.mn1";
+    FromFile(fN);
     int SocketFD;
     SocketFD = socket(AF_INET, SOCK_STREAM, 0);
     if (SocketFD == -1)
@@ -16,7 +24,8 @@ int main(void)
         perror("socket");
         return -1;
     }
-
+    int opt = 1;
+    setsockopt(SocketFD, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     struct sockaddr_in ServerAdress;
     ServerAdress.sin_family = AF_INET;
     ServerAdress.sin_port = htons(PORT);
@@ -33,24 +42,17 @@ int main(void)
         perror("listen");
         return -3;
     }
-
-    // char buffer[512];
-
-    // int i = 3;
-    //     ClientFD = accept(SocketFD,NULL,NULL);
-    //     if(ClientFD < 0){
-    //         perror("accept");
-    //         i--;
-    //     }
-    //     if(recv(ClientFD,buffer,128*sizeof(char),0)==-1){
-    //         perror("recv");
-    //         i--;
-    //     }
-    //     printf("message came from %d which was:\n%s\n",ClientFD,buffer);
-    Handle(SocketFD);
-    Handle(SocketFD);
-    Handle(SocketFD);
-    sleep(1);
+    EnqueuerArguments Args = {
+        .ServerFD = SocketFD,
+        .ThreadId = 0
+    };
+    SetBit(Working,0);
+    queuerId = pthread_create(&queuer,NULL,Enqueuer,&Args);
+    scanf("%c",&CommandCharecter);
+    while(CommandCharecter != 'C'){
+        scanf("%c",&CommandCharecter);
+    }
+    pthread_join(queuerId,NULL);
     close(SocketFD);
     printf("server has closed successfully\n");
     return 0;
