@@ -235,7 +235,7 @@ void *Enqueuer(void *args)
         int ClientFD = accept(ArgStruct.ServerFD, NULL, NULL);
         if (ClientFD == -1)
         {
-            perror("accept");
+            // perror("accept");
             for (int i = 0; i < BLOG; i++)
             {
                 ClearBit(Working,i+1);
