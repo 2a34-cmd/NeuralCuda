@@ -95,19 +95,19 @@ double* CalcNeuralNetworkNoSE(unsigned char *Inputs){
     uint8_t WhichIsOutput = 1;
     double sum = 0;
     for(int i=1; i <NN.NumOfLayers;i+=2){
-        Alternative2 = malloc((NN.layers[i].NumOfNu)*sizeof(double));
+        Alternative2 = realloc(Alternative2,(NN.layers[i].NumOfNu)*sizeof(double));
         calcNoSE(i,Alternative,Alternative2);
         WhichIsOutput = 2;
         free(Alternative);
         if(i+1 < NN.NumOfLayers){
-            Alternative = malloc((NN.layers[i+1].NumOfNu)*sizeof(double));
+            Alternative = realloc(Alternative,(NN.layers[i+1].NumOfNu)*sizeof(double));
             calcNoSE(i+1,Alternative2,Alternative);
             WhichIsOutput = 1;
             free(Alternative2);
         }
     }
     if(WhichIsOutput == 2){
-        Alternative = malloc((NN.layers[NN.NumOfLayers -1].NumOfNu)*sizeof(double));
+        Alternative = realloc(Alternative,(NN.layers[NN.NumOfLayers -1].NumOfNu)*sizeof(double));
         memcpy(Alternative,Alternative2,(NN.layers[NN.NumOfLayers -1].NumOfNu)*sizeof(double));
         free(Alternative2);
     }

@@ -44,7 +44,8 @@ void floatExtract(const char *lin, double *floats, ssize_t linlength)
 // this method translates the file with path fN to member of class NeuralNet
 void FromFile(char* fN)
 {
-    char* line = calloc(40,sizeof(char));
+    // char* line = calloc(40,sizeof(char));
+    char line[40] = {0};
     ssize_t LineLength = 0;
     size_t useless = 0;
     FILE* fileS = fopen(fN, "r");
@@ -125,6 +126,6 @@ void FromFile(char* fN)
         memset(buffer, 0, 8 * sizeof(double));
     }
     fclose(fileS);
-    free(line);
+    // free(line);
     return;
 }
